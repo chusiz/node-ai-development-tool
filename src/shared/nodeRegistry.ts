@@ -27,7 +27,7 @@
 //     靠"仅类型"擦除后不存在运行时循环依赖;
 //   - GraphIssue / NodeSpecSource 同理来自 workflow。
 import type { GraphIssue, NodeSpecSource } from './workflow'
-import type { NodeConfig } from './canvas'
+import type { ChartParams, ChartType, NodeConfig } from './canvas'
 // 按值引:normalizeSubgraph 是纯函数(与 canvas 的 migrateGraph 同一族),
 // canvas 对 nodeRegistry 只有 type-only 的反向引用,运行时无环
 import { normalizeSubgraph } from './canvas'
@@ -90,6 +90,7 @@ export type NodeIconName =
   | 'image_output'
   | 'agent'
   | 'router'
+  | 'chart'
 
 /** 类型角标:图标 + 文字 + 颜色类(+ 可选 tooltip) */
 export interface NodeBadge {
@@ -845,6 +846,54 @@ export const NODE_TYPES = {
       return out
     },
   },
+  chart: {
+    // ★ 可视化图形制作(v0.6.2):内置图表节点 —— 把上游文本里的数据渲染成 SVG 落盘。
+    // 数据模板(promptTemplate)可含 {{input}} / {{prev}} 注入上游产出;ECharts SSR 出 SVG,
+    // 不依赖 node-canvas。产物随项目打包交付,文档节点可引用。
+    label: '图表',
+    badge: { icon: 'chart', text: '图表', cls: 'kind-chart', title: '可视化图表:把上游数据渲染成 SVG(柱/折/饼/散点/漏斗)' },
+    ports: { target: 1, source: 1 },
+    executor: 'builtin',
+    action: 'chart',
+    payload: 'handoff',
+    defaultTitle: '图表节点',
+    addEntries: [
+      {
+        key: 'chart',
+        label: '图表',
+        icon: 'chart',
+        hint: '可视化:把上游文本里的 JSON 数据渲染成 SVG 图表,随项目打包交付',
+        preset: { chartParams: { chartType: 'bar', width: 800, height: 480 } },
+      },
+    ],
+    defaultConfig: { chartParams: { chartType: 'bar', width: 800, height: 480, title: '' } },
+    normalize: (m, raw) => {
+      const rawCp = (raw as { chartParams?: Partial<ChartParams> }).chartParams
+      const t = String(rawCp?.chartType ?? 'bar')
+      const w = Number(rawCp?.width)
+      const h = Number(rawCp?.height)
+      return {
+        ...m,
+        chartParams: {
+          chartType: ['bar', 'line', 'pie', 'scatter', 'funnel'].includes(t) ? (t as ChartType) : 'bar',
+          width: Number.isFinite(w) ? Math.max(320, Math.min(2000, Math.trunc(w))) : 800,
+          height: Number.isFinite(h) ? Math.max(240, Math.min(2000, Math.trunc(h))) : 480,
+          title: typeof rawCp?.title === 'string' ? rawCp.title : '',
+        },
+      }
+    },
+    validate: (ctx) => {
+      const out: GraphIssue[] = []
+      if (!String(ctx.data.promptTemplate ?? '').trim()) {
+        out.push({
+          level: 'warn',
+          nodeId: ctx.id,
+          message: `图表节点「${ctx.data.title || ctx.id}」还没写数据模板 —— 至少写一份 JSON(可含 {{input}} 注入上游产出)`,
+        })
+      }
+      return out
+    },
+  },
   prompt: {
     // ★ 生图工作区(v0.5.0):正向提示词节点 —— 纯数据源,不执行任何动作
     label: '正向提示词',
@@ -1100,6 +1149,7 @@ export type NodeKind =
   | 'image_output'
   | 'agent'
   | 'router'
+  | 'chart'
 
 /**
  * 取类型定义。未知 kind(手改 graph.json 写了 type:'foo')一律**回落 feature**
@@ -1246,6 +1296,7 @@ export const WORKSPACE_NODES: Record<WorkspaceId, readonly NodeKind[]> = {
     'subgraph',
     'agent',
     'router',
+    'chart',
   ],
   image: ['prompt', 'prompt_negative', 'sampler', 'image_output', 'handoff'],
 }

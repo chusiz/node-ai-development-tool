@@ -50,6 +50,7 @@ import { killAllBuiltin, registerBuiltinAction } from '../builtin/registry'
 import { ImageGen } from '../imagegen'
 import { VideoGen } from '../videogen'
 import { Handoff } from '../handoff'
+import { ChartGen } from '../chartgen/ChartGen'
 import { TestRunner } from '../testrun'
 import { sdStatus, sdStart, sdStop, type LocalSdStatus, type SdStartResult } from '../localservices'
 import { readThumb } from '../images/readThumb'
@@ -151,6 +152,11 @@ export function createIpc(): {
   const handoff = new Handoff()
   registerBuiltinAction('handoff', {
     run: (r) => handoff.run(r),
+  })
+  // 可视化图形(v0.6.2):图表节点 —— ECharts SSR 出 SVG,落盘 assets/generated/charts/
+  const chartgen = new ChartGen()
+  registerBuiltinAction('chart', {
+    run: (r) => chartgen.run(r),
   })
   /*
    * 生图工作区(v0.5.0)执行器:

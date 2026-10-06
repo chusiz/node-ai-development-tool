@@ -4309,7 +4309,7 @@ async function agentOrchestrationTests(): Promise<void> {
   {
     const env = new FakeEnv()
     env.plan('A', [
-      { ok: false, failure: { kind: 'quota', retryable: true, hint: '超时', raw: 'x' } },
+      { ok: false, output: '', failure: { kind: 'quota', retryable: true, hint: '超时', raw: 'x' } },
       { ok: true, output: '好了。任务完成' },
     ])
     const st = await new WorkflowRunner(env).run(
@@ -4570,10 +4570,10 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
      * 顺序 = NODE_TYPES 的键插入顺序;新类型追加在末尾,老入口的相对位置不动 ——
      * 菜单里的数字键直选(1-9)依赖这个顺序,挪一下用户的肌肉记忆就废了。
      */
-    assert(entries.length === 19, `添加入口恰好 19 项(实际 ${entries.length})`)
+    assert(entries.length === 20, `添加入口恰好 20 项(实际 ${entries.length})`)
     assert(
       entries.map((e) => e.kind).join(',') ===
-        'project,feature,feature,merge,output,image,review,test,doc,game,video,handoff,agent,agent,router,prompt,prompt_negative,sampler,image_output',
+        'project,feature,feature,merge,output,image,review,test,doc,game,video,handoff,agent,agent,router,chart,prompt,prompt_negative,sampler,image_output',
       `入口顺序/类型正确(实际 ${entries.map((e) => e.kind).join(',')})`,
     )
     /*
@@ -4613,6 +4613,7 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
       { kind: 'agent', label: '智能体(循环)', icon: 'agent', hint: '同一角色多轮迭代:直到输出含「完成标志」或达到最大轮次' },
       { kind: 'agent', label: '智能体(并行)', icon: 'parallel', hint: '独立支路的智能体(并行跑,不自动注入上游产出)' },
       { kind: 'router', label: '路由(分支)', icon: 'router', hint: 'LLM 看完上游成果后选一条出边分支激活,其余分支自动跳过' },
+      { kind: 'chart', label: '图表', icon: 'chart', hint: '可视化:把上游文本里的 JSON 数据渲染成 SVG 图表,随项目打包交付' },
       { kind: 'prompt', label: '正向提示词', icon: 'prompt', hint: '生图:写画面要什么,连到采样出图节点' },
       {
         kind: 'prompt_negative',
@@ -4641,7 +4642,7 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
     }))
     assert(
       JSON.stringify(actualEntries) === JSON.stringify(expectedEntries),
-      `十九条入口的 label/icon/hint 与声明表逐字相等(实际 ${JSON.stringify(actualEntries)})`,
+      `二十条入口的 label/icon/hint 与声明表逐字相等(实际 ${JSON.stringify(actualEntries)})`,
     )
     // 文字里不许再有 emoji / 几何图形字符 —— 图标一律走 icon 字段
     const emojiish = /[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u
@@ -5013,6 +5014,95 @@ function waitReady(child: ChildProcess): Promise<number> {
  *
  * 把 QA 最该挑刺的两条暗沟写成断言:S1(命令/JSON 注入)、S2(任意文件读取)。
  */
+/**
+ * v0.6.2 图表节点:数据解析(柱/饼/散点 + 容错)+ ECharts SSR 出 SVG。
+ * echarts 已在 dependencies,node 直接可跑;零网络、零子进程。
+ */
+async function chartNodeTests(): Promise<void> {
+  const { buildChartOption, renderChart, CHART_TYPE_LABEL } = await import('../src/main/chartgen/render')
+
+  // ---- 柱/折线:{"categories","series"} ----
+  {
+    const r = buildChartOption({ chartType: 'bar', width: 800, height: 480, dataText: '{"categories":["一月","二月"],"series":[10,20]}' })
+    assert(r.ok && r.dataPoints === 2, `柱状图解析 2 个数据点(实际 ${JSON.stringify(r)})`)
+  }
+  // ---- 柱:对象数组 ----
+  {
+    const r = buildChartOption({ chartType: 'bar', width: 800, height: 480, dataText: '[{"name":"A","value":3},{"name":"B","value":5}]' })
+    assert(r.ok && r.dataPoints === 2, `对象数组解析(实际 ${JSON.stringify(r)})`)
+  }
+  // ---- 饼:对象数组 → 有 series.data ----
+  {
+    const r = buildChartOption({ chartType: 'pie', width: 800, height: 480, dataText: '[{"name":"A","value":3},{"name":"B","value":5}]' })
+    assert(r.ok && r.option.series !== undefined, `饼图解析(实际 ${JSON.stringify(r)})`)
+  }
+  // ---- 散点:[[x,y],…] ----
+  {
+    const r = buildChartOption({ chartType: 'scatter', width: 800, height: 480, dataText: '[[1,2],[3,5],[8,9]]' })
+    assert(r.ok && r.dataPoints === 3, `散点解析(实际 ${JSON.stringify(r)})`)
+  }
+  // ---- 说明文字 + JSON 混排(模型/上游常见输出):宽容提取 ----
+  {
+    const r = buildChartOption({ chartType: 'bar', width: 800, height: 480, dataText: '这是销量数据:\n{"categories":["A","B"],"series":[1,2]}\n请画图' })
+    assert(r.ok && r.dataPoints === 2, `混排文本宽容提取(实际 ${JSON.stringify(r)})`)
+  }
+  // ---- 非法 JSON → 人话失败 ----
+  {
+    const r = buildChartOption({ chartType: 'bar', width: 800, height: 480, dataText: '不是json 随便写' })
+    assert(!r.ok && r.error.includes('合法 JSON'), `非法 JSON 人话失败(实际 ${r.ok ? 'ok' : r.error.slice(0, 40)})`)
+  }
+  // ---- 空数据 ----
+  {
+    const r = buildChartOption({ chartType: 'bar', width: 800, height: 480, dataText: '[]' })
+    assert(!r.ok, '空数组 → 失败')
+  }
+  // ---- 数据形状不认识 ----
+  {
+    const r = buildChartOption({ chartType: 'bar', width: 800, height: 480, dataText: '{"foo":"bar"}' })
+    assert(!r.ok && r.error.includes('不认识'), `形状不认识 → 人话(实际 ${r.ok ? 'ok' : r.error.slice(0, 40)})`)
+  }
+
+  // ---- ECharts SSR 出 SVG(真实渲染) ----
+  {
+    const res = renderChart({ chartType: 'line', title: '月度销量', width: 800, height: 480, dataText: '{"categories":["一月","二月","三月"],"series":[10,20,15]}' })
+    assert(res.ok, `ECharts SSR 渲染成功(实际 ${JSON.stringify(res)})`)
+    if (res.ok) {
+      assert(res.svg.includes('<svg') && res.svg.includes('月度销量'), 'SVG 含 svg 根与标题')
+    }
+  }
+
+  // ---- ChartGen 执行器全链路:落盘 + 产出相对路径 ----
+  {
+    const { ChartGen } = await import('../src/main/chartgen/ChartGen')
+    const os = await import('node:os')
+    const fs = await import('node:fs/promises')
+    const path = await import('node:path')
+    const dir = path.join(os.tmpdir(), `chusiz-e2e-chart-${Date.now()}`)
+    const gen = new ChartGen()
+    const res = await gen.run({
+      canvasId: 'c',
+      nodeId: 'CH',
+      action: 'chart',
+      projectDir: dir,
+      nodeTitle: '销量图',
+      prompt: '{"categories":["A","B"],"series":[1,2]}',
+      chartParams: { chartType: 'bar', width: 640, height: 400, title: '销量' },
+    })
+    assert(res.ok, `ChartGen 执行成功(实际 ${JSON.stringify(res.error ?? '')})`)
+    if (res.ok) {
+      const rel = res.artifacts?.[0] ?? ''
+      assert(rel.includes('assets/generated/charts/') && rel.endsWith('chart.svg'), `产物相对路径(实际 ${rel})`)
+      const abs = path.join(dir, ...rel.split('/'))
+      const svg = await fs.readFile(abs, 'utf8')
+      assert(svg.includes('<svg'), '落盘 SVG 可读')
+      assert((res.handoffText?.includes('图表完成')) === true, '产出文本可交下游')
+    }
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
+
+  assert(Object.keys(CHART_TYPE_LABEL).length === 5, '五种图表类型标签齐备')
+}
+
 async function imageChainTests(): Promise<void> {
   const ROOT = path.join(os.tmpdir(), `haowan-image-${Date.now().toString(36)}`)
   const PROJECT = path.join(ROOT, 'proj')
@@ -7864,6 +7954,9 @@ const main = async (): Promise<void> => {
 
   console.log('\n========== 22. 图像节点:两 provider / 取消 / S1·S2 攻击样例(零 LLM) ==========')
   await imageChainTests()
+
+  console.log('\n========== 22b. 图表节点:数据解析容错 / ECharts SSR 出 SVG(零网络) ==========')
+  await chartNodeTests()
 
   console.log('\n========== 23. 多服务商 / API 直连:契约·脱敏·协议解析·工具围栏(零网络) ==========')
   await providerApiTests()

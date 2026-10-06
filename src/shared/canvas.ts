@@ -258,6 +258,23 @@ export type NodeConfig = {
    * LLM 看完上游成果后选一条分支激活,其余分支自动跳过。
    */
   routes?: string[]
+
+  // ---- chart 专属(v0.6.2 可视化图形制作:内置 SVG 图表渲染)----
+  /** 图表参数:类型 / 标题 / 尺寸 / 数据(数据模板可含 {{input}} 注入上游产出) */
+  chartParams?: ChartParams
+}
+
+/** 图表类型(v0.6.2):ECharts SSR 支持的 5 种 */
+export type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'funnel'
+
+/** 图表参数(v0.6.2):ECharts SSR 渲染为 SVG,落盘 assets/generated/charts/ */
+export interface ChartParams {
+  chartType: ChartType
+  title?: string
+  /** 画布宽(px),夹到 320..2000 */
+  width: number
+  /** 画布高(px),夹到 240..2000 */
+  height: number
 }
 
 /**

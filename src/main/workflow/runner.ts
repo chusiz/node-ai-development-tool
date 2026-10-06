@@ -159,7 +159,7 @@ export function parseRouterPick(
  * 若想让它失败日志更可读,在此登记一条即可;漏登记会回落到通用的"执行"。
  * ⚠️ 这只是给用户看的措辞,调度**不**依赖它(分流只认 spec.executor/action)。
  */
-const ACTION_FAIL_LABEL: Record<string, string> = { package: '打包', image: '出图', test: '测试', video: '视频分析' }
+const ACTION_FAIL_LABEL: Record<string, string> = { package: '打包', image: '出图', test: '测试', video: '视频分析', chart: '图表渲染', handoff: '交接' }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
@@ -779,9 +779,9 @@ export class WorkflowRunner {
     // 失败文案前缀(打包/出图…),仅用于日志可读性;未登记回落"执行"(语义不变)
     const failLabel = ACTION_FAIL_LABEL[spec.action ?? ''] ?? '执行'
     try {
-      // 图像节点 / 采样出图:先做**阶段一**占位符展开(调度侧才拿得到上游产出与依赖关系)
+      // 图像节点 / 采样出图 / 图表:先做**阶段一**占位符展开(调度侧才拿得到上游产出与依赖关系)
       let prompt: string | undefined
-      if (spec.action === 'image' || spec.action === 'sampler') {
+      if (spec.action === 'image' || spec.action === 'sampler' || spec.action === 'chart') {
         prompt = await this.expandImagePrompt(run, spec, spec.id)
       }
 
@@ -799,6 +799,7 @@ export class WorkflowRunner {
         imageProvider: spec.imageProvider,
         videoParams: spec.videoParams,
         handoffNote: spec.handoffNote,
+        chartParams: spec.chartParams,
         promptText: spec.promptText,
         negativeText: spec.negativeText,
         testCommand: spec.testCommand,
@@ -870,11 +871,17 @@ export class WorkflowRunner {
           outputChars: videoOut.length,
           outputPreview: videoOut.slice(0, 600),
         })
-      } else if (spec.action === 'handoff' || spec.action === 'image-output' || spec.action === 'noop') {
+      } else if (
+        spec.action === 'handoff' ||
+        spec.action === 'image-output' ||
+        spec.action === 'noop' ||
+        spec.action === 'chart'
+      ) {
         /*
          * 交接节点的产出 = 素材清单文本(不是文件列表):必须进 outputs,
          * 下游 {{prev}} / {{node:<id>}} 取到的就是"有哪些素材、在哪、干什么用",
          * AI 制作/打包时按相对路径直接引用这些图片。
+         * 图表节点同款:产出 = 相对路径 + 说明文本,下游可引用该 SVG。
          */
         const handoffOut = res.handoffText ?? `[交接完成] ${res.log.slice(-2000)}`
         run.outputs.set(spec.id, handoffOut)

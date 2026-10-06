@@ -941,6 +941,12 @@ button.ghost.on {
 }
 .agent-node.kind-agent { border-left: 3px solid #2f9fa5; }
 .agent-node.kind-router { border-left: 3px solid #b34a7a; }
+/* v0.6.2 可视化图形:图表节点(琥珀) */
+.node-kind-badge.kind-chart {
+  border-color: #c99a2f;
+  color: #f2d68a;
+}
+.agent-node.kind-chart { border-left: 3px solid #c99a2f; }
 
 /* ---------- 子图:配置面板里的内部节点清单 ---------- */
 .subgraph-list {

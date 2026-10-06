@@ -8,6 +8,7 @@ import { effectiveCwd, newCanvasNodeId, resolveProjectDir } from './canvas'
 import type {
   BuildOptions,
   BuildTarget,
+  ChartParams,
   FeatureMode,
   ImageParams,
   ImageProviderConfig,
@@ -117,6 +118,8 @@ export interface WorkflowNodeSpec {
   doneHint?: string
   /** router 专属:分支标签(顺序 = 出边顺序) */
   routes?: string[]
+  /** chart 专属(v0.6.2):图表参数(类型/标题/画布尺寸) */
+  chartParams?: ChartParams
 }
 
 export interface WorkflowEdgeSpec {
@@ -896,6 +899,7 @@ export function specFromGraph(args: {
         maxRounds: isSession && kind === 'agent' ? (n.data.maxRounds ?? 3) : undefined,
         doneHint: isSession && kind === 'agent' ? (n.data.doneHint ?? '任务完成') : undefined,
         routes: isSession && kind === 'router' ? (Array.isArray(n.data.routes) ? n.data.routes.map(String) : []) : undefined,
+        chartParams: def.action === 'chart' ? n.data.chartParams : undefined,
       }
     }),
     edges: expanded.edges.map((e) => ({ source: e.source, target: e.target })),
@@ -967,6 +971,8 @@ export interface NodeSpecSource {
   doneHint?: string
   /** router 专属(v0.6.1):分支标签(顺序 = 出边顺序) */
   routes?: string[]
+  /** chart 专属(v0.6.2):图表参数(类型/标题/画布尺寸) */
+  chartParams?: ChartParams
 }
 
 export interface GraphIssue {
