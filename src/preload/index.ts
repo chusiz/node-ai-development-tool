@@ -91,6 +91,8 @@ const api: RendererApi = {
     remove: (name: string) => ipcRenderer.invoke(CH.skillDelete, name),
     importLocal: (sourceDir: string) => ipcRenderer.invoke(CH.skillImportLocal, sourceDir),
     openDir: () => ipcRenderer.invoke(CH.skillOpenDir),
+    installFromUrl: (url: string) => ipcRenderer.invoke(CH.skillInstallFromUrl, url),
+    marketList: () => ipcRenderer.invoke(CH.skillMarketList),
   },
   dialog: {
     pickDirectory: (title?: string, defaultPath?: string) =>

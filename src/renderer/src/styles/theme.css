@@ -1109,6 +1109,61 @@ button.tiny {
   margin-top: 12px;
 }
 
+/* 技能抽屉页签(v0.6.2 市场) */
+.skill-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.skill-tabs button {
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+.skill-tabs button.active {
+  background: var(--bg-2);
+  border-color: var(--border);
+  color: var(--fg);
+  border-bottom: 2px solid var(--accent);
+}
+
+/* 市场:URL 安装条 + 精选条目(v0.6.2) */
+.market-url {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.market-url input {
+  flex: 1;
+  min-width: 0;
+}
+.market-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+.market-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.market-name {
+  font-weight: 600;
+}
+.market-desc {
+  margin-top: 6px;
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .skill-row {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);

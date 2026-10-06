@@ -19,6 +19,7 @@ export type {
   AgentCapabilities,
   DetectResult,
   SkillEntry,
+  SkillMarketItem,
   SkillOrigin,
   Envelope,
   StartRequest,

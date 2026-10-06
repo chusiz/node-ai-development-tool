@@ -128,12 +128,17 @@ function SkillRow({ s }: { s: SkillEntry }): JSX.Element {
 
 export function SkillsDrawer({ onClose }: { onClose: () => void }): JSX.Element {
   const skills = useSkillsStore((s) => s.skills)
+  const market = useSkillsStore((s) => s.market)
   const error = useSkillsStore((s) => s.error)
   const notice = useSkillsStore((s) => s.notice)
   const busy = useSkillsStore((s) => s.busy)
   const load = useSkillsStore((s) => s.load)
   const importLocal = useSkillsStore((s) => s.importLocal)
+  const installFromUrl = useSkillsStore((s) => s.installFromUrl)
   const openDir = useSkillsStore((s) => s.openDir)
+
+  const [tab, setTab] = useState<'installed' | 'market'>('installed')
+  const [urlInput, setUrlInput] = useState('')
 
   useEffect(() => {
     void load()
@@ -168,43 +173,111 @@ export function SkillsDrawer({ onClose }: { onClose: () => void }): JSX.Element 
           <button onClick={onClose}>关闭</button>
         </header>
 
-        <div className="drawer-body">
-          <div className="note">
-            这里的技能是<strong>全局</strong>的 —— 画布上每个节点都能用。
-            装进来的技能,模型看到的调用名带一层命名空间,写出来是{' '}
-            <code>haowan-skills:技能名</code>,不是裸名字。
-          </div>
+        <div className="skill-tabs">
+          <button className={tab === 'installed' ? 'active' : ''} onClick={() => setTab('installed')}>
+            已安装{skills ? `(${skills.length})` : ''}
+          </button>
+          <button className={tab === 'market' ? 'active' : ''} onClick={() => setTab('market')}>
+            市场
+          </button>
+        </div>
 
+        <div className="drawer-body">
           {error && <div className="errbox">{error}</div>}
           {notice && <div className="note ok">{notice}</div>}
 
-          <div className="skill-actions">
-            <button disabled={!!busy} onClick={() => void pickAndImport()}>
-              导入本地文件夹
-            </button>
-            <button disabled={!!busy} onClick={() => void openDir()}>
-              打开技能文件夹
-            </button>
-          </div>
-
-          {skills === null ? (
-            <div className="note">读取技能库中…</div>
-          ) : skills.length === 0 ? (
-            <div className="skill-empty">
-              <div>技能库是空的</div>
-              <div className="sub">
-                两种装法:点「导入本地文件夹」选一个现成的,或者点「打开技能文件夹」
-                自己把文件夹拷进去 —— 复制完之后回到这里,列表会自动出现。
+          {tab === 'installed' ? (
+            <>
+              <div className="note">
+                这里的技能是<strong>全局</strong>的 —— 画布上每个节点都能用。
+                装进来的技能,模型看到的调用名带一层命名空间,写出来是{' '}
+                <code>haowan-skills:技能名</code>,不是裸名字。
               </div>
-            </div>
+
+              <div className="skill-actions">
+                <button disabled={!!busy} onClick={() => void pickAndImport()}>
+                  导入本地文件夹
+                </button>
+                <button disabled={!!busy} onClick={() => void openDir()}>
+                  打开技能文件夹
+                </button>
+              </div>
+
+              {skills === null ? (
+                <div className="note">读取技能库中…</div>
+              ) : skills.length === 0 ? (
+                <div className="skill-empty">
+                  <div>技能库是空的</div>
+                  <div className="sub">
+                    三种装法:点「市场」装开源技能,或点「导入本地文件夹」选一个现成的,
+                    或点「打开技能文件夹」自己把文件夹拷进去。
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <h3>
+                    已装 {skills.length} 个{enabledCount > 0 && ` · 其中 ${enabledCount} 个启用中`}
+                  </h3>
+                  {skills.map((s) => (
+                    <SkillRow key={s.name} s={s} />
+                  ))}
+                </>
+              )}
+            </>
           ) : (
             <>
-              <h3>
-                已装 {skills.length} 个{enabledCount > 0 && ` · 其中 ${enabledCount} 个启用中`}
-              </h3>
-              {skills.map((s) => (
-                <SkillRow key={s.name} s={s} />
-              ))}
+              <div className="note">
+                从 <strong>GitHub / Gitee</strong> 安装开源技能(仅公开仓库,https)。
+                下载后做<strong>域名白名单 + 防路径穿越 + 危险命令扫描</strong>三道校验再落盘。
+              </div>
+
+              <div className="market-url">
+                <input
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder="https://github.com/owner/repo(支持 …/tree/main/子目录)"
+                />
+                <button
+                  disabled={!!busy || !urlInput.trim()}
+                  onClick={() => {
+                    const u = urlInput.trim()
+                    setUrlInput('')
+                    void installFromUrl(u)
+                  }}
+                >
+                  安装
+                </button>
+              </div>
+
+              <h3>精选技能集(点「安装」整仓一次装齐)</h3>
+              {market === null ? (
+                <div className="note">读取市场中…</div>
+              ) : (
+                market.map((m) => (
+                  <div key={m.id} className="market-item">
+                    <div className="market-head">
+                      <span className="market-name">{m.label}</span>
+                      <span className="spacer" />
+                      <button
+                        disabled={!!busy}
+                        onClick={() => void installFromUrl(m.url)}
+                      >
+                        {busy?.startsWith('install-url') ? '安装中…' : '安装'}
+                      </button>
+                    </div>
+                    <div className="market-desc">{m.description}</div>
+                    <div className="skill-meta">
+                      <span className="skill-origin">作者:{m.author}</span>
+                      <span>{m.tags.join(' · ')}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              <div className="note">
+                <strong>任何</strong>公开技能仓库都可以粘贴安装,不限于上面的精选。
+                安装后回到「已安装」页签可启用 / 停用 / 删除。
+              </div>
             </>
           )}
         </div>

@@ -125,6 +125,10 @@ export const CH = {
   skillDelete: 'skill:delete',
   skillImportLocal: 'skill:importLocal',
   skillOpenDir: 'skill:openDir',
+  /** 从 GitHub / Gitee URL 安装开源技能(v0.6.2,4.4 S1) */
+  skillInstallFromUrl: 'skill:installFromUrl',
+  /** 内置技能市场精选列表(v0.6.2,4.4 S3) */
+  skillMarketList: 'skill:marketList',
   workflowRun: 'workflow:run',
   workflowCancel: 'workflow:cancel',
   workflowCancelNode: 'workflow:cancelNode',
@@ -345,6 +349,19 @@ export interface SkillEntry {
   nameProblem: string | null
   /** 技能目录绝对路径 */
   dir: string
+}
+
+/** 内置技能市场条目(v0.6.2,4.4 S3)。安装走 skillInstallFromUrl */
+export interface SkillMarketItem {
+  id: string
+  /** 市场里的展示名 */
+  label: string
+  description: string
+  /** GitHub / Gitee 仓库地址(点安装 = 解析 + 下载 + 校验) */
+  url: string
+  /** 作者 / 来源生态 */
+  author: string
+  tags: string[]
 }
 
 export interface StartRequest {
@@ -629,6 +646,10 @@ export interface RendererApi {
     importLocal(sourceDir: string): Promise<Envelope<{ name: string }>>
     /** 在资源管理器里打开技能库目录 */
     openDir(): Promise<Envelope<{ opened: true }>>
+    /** 从 GitHub / Gitee URL 安装开源技能(v0.6.2,4.4 S1,带安全校验) */
+    installFromUrl(url: string): Promise<Envelope<{ names: string[]; dangerHits: [string, string][] }>>
+    /** 内置技能市场精选列表(v0.6.2,4.4 S3) */
+    marketList(): Promise<Envelope<SkillMarketItem[]>>
   }
   dialog: {
     /** 打开系统文件夹选择器。取消返回 null */

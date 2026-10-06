@@ -42,6 +42,8 @@ import {
   setSkillEnabled,
   skillsDropDir,
 } from '../skills/store'
+import { installSkillFromUrl } from '../skills/remote'
+import type { SkillMarketItem } from '../../shared/ipc'
 import { WorkflowRunner, CycleError } from '../workflow/runner'
 import { makeRunnerEnv } from '../workflow/env'
 import { readRun } from '../workflow/runLog'
@@ -62,6 +64,36 @@ function ok<T>(data: T): Envelope<T> {
 function fail(e: unknown): Envelope<never> {
   return { ok: false, error: e instanceof Error ? e.message : String(e) }
 }
+
+/**
+ * 内置技能市场精选(v0.6.2,4.4 S3)。
+ *
+ * 选品原则(设计报告 4.4.2):本地可运行 / 无第三方账号依赖 / 覆盖互补。
+ * 这里只列**真实存在**的公开仓库,不编造子路径 —— 整仓安装时 collectSkillDirs
+ * 会把仓库根下一层所有技能目录一次收齐,不用逐个挑。
+ * 任意公开技能仓库 URL 都可经「粘贴 URL 安装」入口安装,不限于下表。
+ */
+const SKILL_MARKET: SkillMarketItem[] = [
+  {
+    id: 'anthropics-skills',
+    label: 'anthropics/skills · 官方全家桶',
+    description:
+      'Anthropic 官方技能集:docx / pdf / pptx / xlsx 办公读写、web-search / web-fetch 联网检索、' +
+      'deep-research 多步研究、artifact-builder HTML 产物、canvas-design 视觉设计等几十个技能(整仓一次装齐)。',
+    url: 'https://github.com/anthropics/skills',
+    author: 'Anthropic 官方',
+    tags: ['官方', '办公文档', '联网检索', '研究', '设计'],
+  },
+  {
+    id: 'obra-superpowers',
+    label: 'obra/superpowers · 社区全能技能集',
+    description:
+      '知名社区技能集(superpowers):写作、编程、研究、日常任务等大量可组合技能,本地可跑、无账号依赖。',
+    url: 'https://github.com/obra/superpowers',
+    author: 'Jesse Vincent(obra)',
+    tags: ['社区', '写作', '编程', '研究'],
+  },
+]
 
 /** 统一包一层:任何 handler 抛异常都变成 { ok:false, error },渲染侧不必 try/catch */
 function handle<A extends unknown[], R>(
@@ -409,6 +441,11 @@ export function createIpc(): {
   handle(CH.skillImportLocal, (sourceDir: string) =>
     installSkillDir(sourceDir, { kind: 'local', path: sourceDir, at: Date.now() }),
   )
+
+  /* ---------- 开源技能市场(v0.6.2,4.4 S1+S3) ---------- */
+  handle(CH.skillInstallFromUrl, (url: string) => installSkillFromUrl(url))
+
+  handle(CH.skillMarketList, () => SKILL_MARKET)
 
   handle(CH.skillOpenDir, async () => {
     const err = await shell.openPath(skillsDropDir())

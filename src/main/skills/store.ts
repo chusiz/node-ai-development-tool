@@ -266,8 +266,10 @@ export async function installSkillDir(
  *
  * 只往下看**一层**:再深就成了漫无目的地遍历整棵仓库树,而子目录布局的
  * 常见形态就是"仓库根 → 技能目录"这一层。
+ *
+ * 导出给 remote.ts(4.4 GitHub 安装)复用同一份定位逻辑。
  */
-async function findSkillMd(dir: string): Promise<string | null> {
+export async function findSkillMd(dir: string): Promise<string | null> {
   const top = path.join(dir, 'SKILL.md')
   try {
     if ((await fs.stat(top)).isFile()) return top

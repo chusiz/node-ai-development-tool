@@ -1,11 +1,13 @@
 import { create } from 'zustand'
-import type { SkillEntry } from '../types'
+import type { SkillEntry, SkillMarketItem } from '../types'
 import { unwrap } from '../lib/unwrap'
 
 interface SkillsState {
   /** null = 还没从主进程读过。和 settingsStore 同样的约定:没读到就不画列表 */
   skills: SkillEntry[] | null
-  /** 正在进行的操作(启用/停用/删除/导入)。同一个时刻只允许一个 */
+  /** 内置技能市场精选(v0.6.2,4.4 S3) */
+  market: SkillMarketItem[] | null
+  /** 正在进行的操作(启用/停用/删除/导入/安装)。同一个时刻只允许一个 */
   busy: string | null
   error: string | null
   /** 上一次操作的结果,给用户一个"刚才那下成了"的确认 */
@@ -16,6 +18,8 @@ interface SkillsState {
   remove(name: string): Promise<void>
   /** 导入本地文件夹。不做确认框 —— 这一步不动任何已有数据,失败也是干净的 */
   importLocal(sourceDir: string): Promise<void>
+  /** 从 GitHub / Gitee URL 安装开源技能(4.4 S1,带安全校验) */
+  installFromUrl(url: string): Promise<void>
   openDir(): Promise<void>
   clearNotice(): void
 }
@@ -45,6 +49,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => {
 
   return {
     skills: null,
+    market: null,
     busy: null,
     error: null,
     notice: null,
@@ -55,6 +60,14 @@ export const useSkillsStore = create<SkillsState>((set, get) => {
       } catch (e) {
         set({ error: (e as Error).message })
       }
+      // 市场精选是内置常量,顺带拉一次;失败不阻塞技能列表
+      window.api.skills
+        .marketList()
+        .then((r) => {
+          const u = r as { ok: true; data: SkillMarketItem[] } | { ok: false; error: string }
+          if (u.ok) set({ market: u.data })
+        })
+        .catch(() => {})
     },
 
     async setEnabled(name, enabled) {
@@ -75,6 +88,16 @@ export const useSkillsStore = create<SkillsState>((set, get) => {
       await run('import', async () => {
         const { name } = unwrap(await window.api.skills.importLocal(sourceDir))
         return `已装好「${name}」`
+      })
+    },
+
+    async installFromUrl(url) {
+      await run('install-url', async () => {
+        const { names, dangerHits } = unwrap(await window.api.skills.installFromUrl(url))
+        const danger = dangerHits.length
+          ? ` · ⚠ ${dangerHits.length} 条危险命令命中,详见列表`
+          : ''
+        return `已从 GitHub 装好 ${names.length} 个技能:${names.join('、')}${danger}`
       })
     },
 
