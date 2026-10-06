@@ -107,6 +107,52 @@ class SessionFailed extends Error {
 }
 
 /**
+ * 节点被取消(用户点取消 / cancelNode)。与会话失败**分开**:
+ * 取消不是错误,不该触发外层 catch 的重试/判死分支 —— 那是失败语义。
+ */
+class CancelledError extends Error {
+  constructor() {
+    super('节点已取消')
+    this.name = 'CancelledError'
+  }
+}
+
+/**
+ * 路由决策解析(v0.6.1):把 LLM 的一行输出解析成"选中的分支"。
+ *
+ * 解析顺序(容错):
+ *   ① 「分支N / 第N个 / 选项N」(1-based)显式编号;
+ *   ② 分支标签(routes[i])直接命中;
+ *   ③ 兜底:**激活全部分支**并标 unparsed —— 宁可多跑,不可漏跑
+ *      (路由解析失败不该让整条流水线静默失去一条支路)。
+ */
+export function parseRouterPick(
+  text: string,
+  routes: readonly string[],
+  outgoing: readonly string[],
+): { index: number; label: string; activeTargets: string[]; unparsed: boolean } {
+  const pick = (i: number) => {
+    const idx = Math.max(0, Math.min(i, outgoing.length - 1))
+    return {
+      index: idx,
+      label: routes[idx] ? `分支${idx + 1}(${routes[idx]})` : `分支${idx + 1}`,
+      activeTargets: [outgoing[idx]],
+      unparsed: false,
+    }
+  }
+  const m = text.match(/分支\s*(\d+)|第\s*(\d+)\s*(?:个|条)|选项\s*(\d+)/)
+  if (m) {
+    const raw = m[1] ?? m[2] ?? m[3]
+    const idx = Number(raw) - 1
+    if (idx >= 0 && idx < outgoing.length) return pick(idx)
+  }
+  for (let i = 0; i < routes.length; i++) {
+    if (routes[i] && text.includes(routes[i])) return pick(i)
+  }
+  return { index: -1, label: '全部(未解析)', activeTargets: [...outgoing], unparsed: true }
+}
+
+/**
  * 内置动作失败时节点日志的**中文前缀**(纯文案,不参与调度)。
  *
  * 与 runBuiltinNode 里按 action 收尾分派同处 —— 加一个内置动作(action)时,
@@ -127,6 +173,8 @@ interface ActiveRun {
   outputs: Map<string, string>
   /** 节点 → 落盘后的 blob 路径(溢出时才有) */
   spilled: Map<string, string>
+  /** router 节点 → 本次激活的出边目标节点列表(其余出边分支自动跳过) */
+  routerPick: Map<string, string[]>
   state: RunState
   cancelled: boolean
 }
@@ -208,6 +256,7 @@ export class WorkflowRunner {
       active,
       outputs: new Map(),
       spilled: new Map(),
+      routerPick: new Map(),
       state,
       cancelled: false,
     }
@@ -375,6 +424,8 @@ export class WorkflowRunner {
             const policy = run.spec.nodes.find((s) => s.id === p)?.failurePolicy ?? 'skip'
             return policy !== 'continue'
           }
+          // router 已选出分支:不在激活分支里的节点注定跑不出结果 → 跳过
+          if (pn.status === 'done' && this.routerExcludes(run, p, id)) return true
           return pn.status === 'skipped' || pn.status === 'cancelled'
         })
         if (blocked) {
@@ -404,6 +455,8 @@ export class WorkflowRunner {
         const policy = run.spec.nodes.find((s) => s.id === p)?.failurePolicy ?? 'skip'
         return policy === 'continue'
       }
+      // router 未选中的分支:永远不 ready(propagateSkips 会标 skipped)
+      if (pn.status === 'done' && this.routerExcludes(run, p, id)) return false
       return pn.status === 'done'
     })
   }
@@ -465,57 +518,40 @@ export class WorkflowRunner {
       const prompt = await this.composePrompt(run, spec, spill, nodeId)
 
       try {
-        await this.env.startNode({
-          nodeId,
-          canvasId: run.spec.canvasId,
-          agentId: spec.agentId,
-          /*
-           * model 必须带上来 —— 少了这一行,用户在节点面板上认真选的模型
-           * (以及设置里的默认模型)会在这一跳被丢掉,主进程只能退回内置清单
-           * 第一项,于是报"模型名不对"。specFromGraph 已经把
-           * 「节点显式选的 > 设置里的默认 > 内置首选」算完了,这里原样传下去。
-           * CLI 型 agentId 时它是 undefined,buildApiCtx 之外的路径不读这个字段。
-           */
-          model: spec.model,
-          cwd: spec.cwd,
-          // 续用该节点已有的会话 —— 工作流跑的是"这个节点的助手",不是每次全新的
-          sessionId: before.sessionId ?? undefined,
-          prompt,
-          permissionMode: spec.permissionMode,
-        })
-
-        const outcome = await this.env.waitFor(nodeId)
-
-        if (run.cancelled) {
-          this.setNode(run, nodeId, { status: 'cancelled', endedAt: Date.now() })
+        /*
+         * v0.6.1 工程化 agent 编排:
+         *   - agent:同一角色多轮循环(首轮 = 正常会话,后续轮续聊上轮产出,
+         *     直到输出含 doneHint 或轮次到顶),复用同一套会话失败/重试语义;
+         *   - router:一轮会话 + LLM 分支决策,选中一条出边激活,其余由调度跳过。
+         * 两者都走 runSessionOnce,异常(含取消)冒泡到下面的统一 catch。
+         */
+        if (spec.kind === 'agent') {
+          await this.runAgentNode(run, spec, before, prompt, spill)
           return
         }
-        if (outcome.status !== 'done') {
-          throw new SessionFailed(
-            `会话以 ${outcome.status} 结束${outcome.code != null ? `(code ${outcome.code})` : ''}`,
-            outcome.failure,
-          )
+        if (spec.kind === 'router') {
+          await this.runRouterNode(run, spec, before, prompt, spill)
+          return
         }
 
-        const recs = await this.env.logsAfter(run.spec.canvasId, nodeId, before.lastSeq, this.env.logTailLimit)
-        const { text, truncated } = extractOutput(recs)
-        if (truncated) {
-          this.env.notice(nodeId, 'warn', '产出超过 4MB,已截断后交给下游')
-        }
-
-        const injected = await injectOne(spill, text)
+        const res = await this.runSessionOnce(run, spec, before, prompt, spill)
+        const injected = await injectOne(spill, res.text)
         if (injected.spilled && injected.file) run.spilled.set(nodeId, injected.file)
         run.outputs.set(nodeId, injected.text)
 
         this.setNode(run, nodeId, {
           status: 'done',
           endedAt: Date.now(),
-          outputChars: text.length,
+          outputChars: res.text.length,
           // 悬停探针(边数据预览)用的开头 600 字;全文在节点日志里,不进运行态
-          outputPreview: text.slice(0, 600),
+          outputPreview: res.text.slice(0, 600),
         })
         return
       } catch (e) {
+        if (e instanceof CancelledError) {
+          this.setNode(run, nodeId, { status: 'cancelled', endedAt: Date.now() })
+          return
+        }
         const msg = e instanceof Error ? e.message : String(e)
         const failure = e instanceof SessionFailed ? e.failure : undefined
 
@@ -564,6 +600,164 @@ export class WorkflowRunner {
         return
       }
     }
+  }
+
+  /**
+   * 会话路径的**单轮执行**:登记 → 等会话 → 取产出 → 返回文本与水位。
+   *
+   * agent 循环 / router 与普通会话节点共用它 —— 三类节点都"发一轮会话拿一轮产出",
+   * 只是调度节奏不同。失败与取消一律抛异常,交给 runNode 的统一 catch。
+   */
+  private async runSessionOnce(
+    run: ActiveRun,
+    spec: WorkflowNodeSpec,
+    before: NodeRunSnapshot,
+    prompt: string,
+    _spill: SpillContext,
+  ): Promise<{ text: string; truncated: boolean; nextSeq: number }> {
+    await this.env.startNode({
+      nodeId: spec.id,
+      canvasId: run.spec.canvasId,
+      agentId: spec.agentId,
+      model: spec.model,
+      cwd: spec.cwd,
+      // 续用该节点已有的会话 —— 工作流跑的是"这个节点的助手",不是每次全新的
+      sessionId: before.sessionId ?? undefined,
+      prompt,
+      permissionMode: spec.permissionMode,
+    })
+
+    const outcome = await this.env.waitFor(spec.id)
+
+    if (run.cancelled) throw new CancelledError()
+    if (outcome.status !== 'done') {
+      throw new SessionFailed(
+        `会话以 ${outcome.status} 结束${outcome.code != null ? `(code ${outcome.code})` : ''}`,
+        outcome.failure,
+      )
+    }
+
+    const recs = await this.env.logsAfter(run.spec.canvasId, spec.id, before.lastSeq, this.env.logTailLimit)
+    const { text, truncated } = extractOutput(recs)
+    if (truncated) {
+      this.env.notice(spec.id, 'warn', '产出超过 4MB,已截断后交给下游')
+    }
+    // 下一轮从本轮最后一条记录之后开始读,才不会把上一轮产出再算一遍
+    return { text, truncated, nextSeq: recs.length > 0 ? recs[recs.length - 1].seq : before.lastSeq }
+  }
+
+  /**
+   * agent 节点(v0.6.1):同一角色**多轮循环**直到完成。
+   *
+   * 首轮 = 正常会话(composePrompt 产物);后续轮把上轮产出续聊,
+   * 输出含 doneHint(默认「任务完成」)即提前收尾,否则跑满 maxRounds(1..8)。
+   * 每轮独立取日志水位,轮次信息进节点日志 —— 用户看得见"卡在第几轮"。
+   */
+  private async runAgentNode(
+    run: ActiveRun,
+    spec: WorkflowNodeSpec,
+    before: NodeRunSnapshot,
+    composed: string,
+    spill: SpillContext,
+  ): Promise<void> {
+    const nodeId = spec.id
+    const maxRounds = Math.max(1, Math.min(8, Math.trunc(spec.maxRounds ?? 3)))
+    const doneHint = (spec.doneHint ?? '任务完成').trim() || '任务完成'
+    let watermark = before.lastSeq
+    let lastText = ''
+    let lastTruncated = false
+
+    for (let round = 1; round <= maxRounds; round++) {
+      if (run.cancelled) throw new CancelledError()
+      const prompt =
+        round === 1
+          ? composed
+          : [
+              `【第 ${round}/${maxRounds} 轮迭代】你上一轮的结果如下:`,
+              lastText,
+              '',
+              `请基于它继续推进任务。当你认为任务已经完成时,在回复末尾单独输出一行,内容只包含「${doneHint}」。`,
+            ].join('\n')
+      const res = await this.runSessionOnce(run, spec, { sessionId: before.sessionId, lastSeq: watermark }, prompt, spill)
+      watermark = res.nextSeq
+      lastText = res.text
+      lastTruncated = res.truncated
+      this.env.notice(nodeId, 'info', `智能体第 ${round}/${maxRounds} 轮完成(产出 ${lastText.length} 字)`)
+      if (lastText.includes(doneHint)) {
+        this.env.notice(nodeId, 'info', `检测到完成标志「${doneHint}」,提前收尾`)
+        break
+      }
+    }
+
+    const injected = await injectOne(spill, lastText)
+    if (injected.spilled && injected.file) run.spilled.set(nodeId, injected.file)
+    run.outputs.set(nodeId, injected.text)
+
+    this.setNode(run, nodeId, {
+      status: 'done',
+      endedAt: Date.now(),
+      outputChars: lastText.length,
+      outputPreview: lastText.slice(0, 600),
+    })
+    void lastTruncated
+  }
+
+  /**
+   * router 节点(v0.6.1):LLM 看完上游成果后**选一条出边分支**激活。
+   *
+   * 一轮会话 → parseRouterPick 解析(编号/标签/兜底全激活)→ 记录到
+   * run.routerPick;调度器的 propagateSkips 据此把未选分支标 skipped。
+   * 节点产出 = 一句"选中了哪条"摘要(下游可引用,但通常只是给人看的)。
+   */
+  private async runRouterNode(
+    run: ActiveRun,
+    spec: WorkflowNodeSpec,
+    before: NodeRunSnapshot,
+    composed: string,
+    spill: SpillContext,
+  ): Promise<void> {
+    const nodeId = spec.id
+    const outgoing = run.spec.edges.filter((e) => e.source === nodeId).map((e) => e.target)
+    const routes = Array.isArray(spec.routes) ? spec.routes : []
+    const branchList = outgoing
+      .map(
+        (t, i) =>
+          `分支${i + 1}${routes[i] ? `(${routes[i]})` : ''}:→ ${run.spec.nodes.find((n) => n.id === t)?.title ?? t}`,
+      )
+      .join('\n')
+    // 模板里写了 {{routes}} 就替换;没写(默认模板)就在末尾补分支清单
+    const prompt = composed.includes('{{routes}}')
+      ? composed.replace(/\{\{routes\}\}/g, branchList)
+      : `${composed}\n\n可选的输出分支:\n${branchList}`
+
+    const res = await this.runSessionOnce(run, spec, before, prompt, spill)
+    const pick = parseRouterPick(res.text, routes, outgoing)
+    run.routerPick.set(nodeId, pick.activeTargets)
+
+    const summary = `选中:${pick.label};激活下游:${pick.activeTargets
+      .map((t) => run.spec.nodes.find((n) => n.id === t)?.title ?? t)
+      .join('、') || '(无)'}`
+    run.outputs.set(nodeId, summary)
+
+    if (pick.unparsed) {
+      this.env.notice(nodeId, 'warn', `路由输出无法解析(${res.text.slice(0, 80)}),已激活全部分支`)
+    }
+    this.env.notice(nodeId, 'info', summary)
+    this.setNode(run, nodeId, {
+      status: 'done',
+      endedAt: Date.now(),
+      outputChars: summary.length,
+      outputPreview: summary,
+    })
+  }
+
+  /** router 已完成且本节点不在其激活分支 → 真。调度用它把未选分支跳过 */
+  private routerExcludes(run: ActiveRun, routerId: string, nodeId: string): boolean {
+    const rs = run.spec.nodes.find((s) => s.id === routerId)
+    if (rs?.kind !== 'router') return false
+    const pick = run.routerPick.get(routerId)
+    if (!pick) return false
+    return !pick.includes(nodeId)
   }
 
   /**

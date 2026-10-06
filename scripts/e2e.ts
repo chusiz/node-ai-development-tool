@@ -42,7 +42,7 @@ import { DEFAULT_SETTINGS, parseSettings, restartRequiredKeys } from '../src/sha
 import { buildIndex, CycleError, normalizeEdges } from '../src/main/workflow/graph'
 import { detectCanvasCycle, subgraphInnerCycleHint } from '../src/shared/graph'
 import { getBuiltinAction } from '../src/main/builtin/registry'
-import { WorkflowRunner, formatTestOutput, type NodeRunSnapshot, type RunnerEnv } from '../src/main/workflow/runner'
+import { WorkflowRunner, formatTestOutput, parseRouterPick, type NodeRunSnapshot, type RunnerEnv } from '../src/main/workflow/runner'
 import { makeRunnerEnv } from '../src/main/workflow/env'
 import {
   DEFAULT_MERGE_TEMPLATE,
@@ -4269,6 +4269,125 @@ async function packagerTests(): Promise<void> {
  * ⚠️ 全部走**应用里真正跑的那份实现**:校验/迁移/规格来自 shared,端口/默认值/入口
  * 来自渲染端真实模块(它们都是纯逻辑,无头 node 里可安全 import —— 测的不是复制品)。
  */
+/**
+ * v0.6.1 工程化 agent 编排测试:agent 循环(轮次/doneHint/重试)与 router 分支
+ * (编号/标签/未解析兜底)。全部走 FakeEnv,零 LLM、零网络。
+ */
+async function agentOrchestrationTests(): Promise<void> {
+  // ---- agent 循环:doneHint 命中提前收尾 ----
+  {
+    const env = new FakeEnv()
+    env.plan('A', [
+      { ok: true, output: '第一轮:框架已搭好,还没完成。' },
+      { ok: true, output: '第二轮:全部完成。任务完成' },
+    ])
+    const st = await new WorkflowRunner(env).run(
+      specOf([nodeSpec('A', '写一个应用', { kind: 'agent', maxRounds: 4, doneHint: '任务完成' })], []),
+    )
+    assert(st.nodes['A']?.status === 'done', `agent 循环完成(实际 ${st.nodes['A']?.status})`)
+    const turns = env.prompts.get('A')?.length ?? 0
+    assert(turns === 2, `agent 在 doneHint 命中后提前收尾(实际 ${turns} 轮)`)
+    assert((env.prompts.get('A')?.[0].includes('写一个应用')) === true, 'agent 首轮用 composePrompt 的正常模板')
+    assert((env.prompts.get('A')?.[1].includes('任务完成')) === true, 'agent 后续轮把完成标志写进续聊指令')
+    assert(env.notices.some((n) => n.nodeId === 'A' && n.text.includes('第 2/4 轮')), 'agent 轮次进节点日志')
+    assert(env.notices.some((n) => n.nodeId === 'A' && n.text.includes('提前收尾')), 'agent 完成标志提示')
+  }
+
+  // ---- agent 循环:跑满 maxRounds(产出 = 最后一轮) ----
+  {
+    const env = new FakeEnv()
+    for (let i = 0; i < 6; i++) env.plan('A', [{ ok: true, output: '还在推进,没完成。' }])
+    const st = await new WorkflowRunner(env).run(
+      specOf([nodeSpec('A', 'x', { kind: 'agent', maxRounds: 3, doneHint: 'DONE' })], []),
+    )
+    const turns = env.prompts.get('A')?.length ?? 0
+    assert(turns === 3, `agent 跑满 3 轮(实际 ${turns})`)
+    assert(st.nodes['A']?.status === 'done', 'agent 轮次到顶仍 done')
+  }
+
+  // ---- agent 会话失败走统一重试语义 ----
+  {
+    const env = new FakeEnv()
+    env.plan('A', [
+      { ok: false, failure: { kind: 'quota', retryable: true, hint: '超时', raw: 'x' } },
+      { ok: true, output: '好了。任务完成' },
+    ])
+    const st = await new WorkflowRunner(env).run(
+      specOf([nodeSpec('A', 'x', { kind: 'agent', maxRounds: 2, retry: 1 })], []),
+    )
+    assert(st.nodes['A']?.status === 'done', `agent 会话失败可重试(实际 ${st.nodes['A']?.status})`)
+  }
+
+  // ---- router:编号解析 + 分支激活/跳过 ----
+  {
+    const env = new FakeEnv()
+    env.plan('R', [{ ok: true, output: '分支2' }])
+    const st = await new WorkflowRunner(env).run(
+      specOf(
+        [
+          nodeSpec('R', '', { kind: 'router', routes: ['有Bug', '通过'] }),
+          nodeSpec('A', '修 bug'),
+          nodeSpec('B', '打包上线'),
+        ],
+        [
+          ['R', 'A'],
+          ['R', 'B'],
+        ],
+      ),
+    )
+    assert(st.nodes['R']?.status === 'done', 'router 完成')
+    assert(st.nodes['B']?.status === 'done', `选中分支(B,第 2 条出边)被执行(实际 ${st.nodes['B']?.status})`)
+    assert(st.nodes['A']?.status === 'skipped', `未选分支(A)被跳过(实际 ${st.nodes['A']?.status})`)
+    assert(env.notices.some((n) => n.nodeId === 'R' && n.text.includes('选中:分支2(通过)')), 'router 日志说明选中分支')
+  }
+
+  // ---- router:标签命中 ----
+  {
+    const env = new FakeEnv()
+    env.plan('R', [{ ok: true, output: '我选“通过”这条路' }])
+    const st = await new WorkflowRunner(env).run(
+      specOf(
+        [nodeSpec('R', '', { kind: 'router', routes: ['有Bug', '通过'] }), nodeSpec('A', 'x'), nodeSpec('B', 'x')],
+        [
+          ['R', 'A'],
+          ['R', 'B'],
+        ],
+      ),
+    )
+    assert(
+      st.nodes['B']?.status === 'done' && st.nodes['A']?.status === 'skipped',
+      `router 标签命中(实际 A=${st.nodes['A']?.status} B=${st.nodes['B']?.status})`,
+    )
+  }
+
+  // ---- router:未解析 → 全分支激活 + warn ----
+  {
+    const env = new FakeEnv()
+    env.plan('R', [{ ok: true, output: '乱七八糟' }])
+    const st = await new WorkflowRunner(env).run(
+      specOf(
+        [nodeSpec('R', '', { kind: 'router' }), nodeSpec('A', 'x'), nodeSpec('B', 'x')],
+        [
+          ['R', 'A'],
+          ['R', 'B'],
+        ],
+      ),
+    )
+    assert(st.nodes['A']?.status === 'done' && st.nodes['B']?.status === 'done', 'router 未解析 → 全部分支激活(宁可多跑)')
+    assert(env.notices.some((n) => n.nodeId === 'R' && n.level === 'warn' && n.text.includes('无法解析')), 'router 未解析有 warn 提示')
+  }
+
+  // ---- parseRouterPick 纯函数 ----
+  {
+    const p1 = parseRouterPick('分支3', [], ['a', 'b', 'c'])
+    assert(p1.index === 2 && p1.activeTargets[0] === 'c', `parseRouterPick 编号解析(实际 ${p1.label})`)
+    const p2 = parseRouterPick('选“修 bug”', ['修 bug', '上线'], ['a', 'b'])
+    assert(p2.index === 0 && p2.activeTargets[0] === 'a', 'parseRouterPick 标签解析')
+    const p3 = parseRouterPick('看情况', [], ['a'])
+    assert(p3.unparsed === true && p3.activeTargets.length === 1, 'parseRouterPick 未解析兜底全激活')
+  }
+}
+
 async function nodesV2ZeroRegressionTests(): Promise<void> {
   // ---------- ① 校验:V1..V8 逐条 ----------
   {
@@ -4445,15 +4564,16 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
   {
     const entries = addEntryList()
     /*
-     * 十六条入口 = 十个类型里 feature 占两条(串行 / 并行),v0.4.1 新增 game / video,
-     * v0.4.2 新增 handoff,v0.5.0 新增生图工作区四节点(prompt / prompt_negative / sampler / image_output)。
+     * 十九条入口 = 十个类型里 feature 占两条(串行 / 并行),v0.4.1 新增 game / video,
+     * v0.4.2 新增 handoff,v0.5.0 新增生图工作区四节点(prompt / prompt_negative / sampler / image_output),
+     * v0.6.1 新增 agent(循环/并行两条)与 router。
      * 顺序 = NODE_TYPES 的键插入顺序;新类型追加在末尾,老入口的相对位置不动 ——
      * 菜单里的数字键直选(1-9)依赖这个顺序,挪一下用户的肌肉记忆就废了。
      */
-    assert(entries.length === 16, `添加入口恰好 16 项(实际 ${entries.length})`)
+    assert(entries.length === 19, `添加入口恰好 19 项(实际 ${entries.length})`)
     assert(
       entries.map((e) => e.kind).join(',') ===
-        'project,feature,feature,merge,output,image,review,test,doc,game,video,handoff,prompt,prompt_negative,sampler,image_output',
+        'project,feature,feature,merge,output,image,review,test,doc,game,video,handoff,agent,agent,router,prompt,prompt_negative,sampler,image_output',
       `入口顺序/类型正确(实际 ${entries.map((e) => e.kind).join(',')})`,
     )
     /*
@@ -4490,6 +4610,9 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
         icon: 'handoff',
         hint: '把图像节点生成的图片交接给软件制作节点:自动收集素材并生成清单,下游直接用',
       },
+      { kind: 'agent', label: '智能体(循环)', icon: 'agent', hint: '同一角色多轮迭代:直到输出含「完成标志」或达到最大轮次' },
+      { kind: 'agent', label: '智能体(并行)', icon: 'parallel', hint: '独立支路的智能体(并行跑,不自动注入上游产出)' },
+      { kind: 'router', label: '路由(分支)', icon: 'router', hint: 'LLM 看完上游成果后选一条出边分支激活,其余分支自动跳过' },
       { kind: 'prompt', label: '正向提示词', icon: 'prompt', hint: '生图:写画面要什么,连到采样出图节点' },
       {
         kind: 'prompt_negative',
@@ -4518,7 +4641,7 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
     }))
     assert(
       JSON.stringify(actualEntries) === JSON.stringify(expectedEntries),
-      `十六条入口的 label/icon/hint 与声明表逐字相等(实际 ${JSON.stringify(actualEntries)})`,
+      `十九条入口的 label/icon/hint 与声明表逐字相等(实际 ${JSON.stringify(actualEntries)})`,
     )
     // 文字里不许再有 emoji / 几何图形字符 —— 图标一律走 icon 字段
     const emojiish = /[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u
@@ -5193,15 +5316,16 @@ async function imageChainTests(): Promise<void> {
       assert(getNodeType('image_output').action === 'image-output', 'image_output 动作 = image-output(素材清单)')
     }
 
-    // ==================== ⑤c 内置模板工作流(v0.6.0):结构 / 归属 / 边下标 ====================
+    // ==================== ⑤c 内置模板工作流(v0.6.0/0.6.1):结构 / 归属 / 边下标 ====================
     {
       const names = Object.keys(WORKFLOW_TEMPLATES)
-      assert(names.length === 4, `内置模板恰好 4 个(实际 ${names.join(',')})`)
+      assert(names.length === 5, `内置模板恰好 5 个(实际 ${names.join(',')})`)
       const expectKinds: Record<string, string[]> = {
         'desktop-app': ['project', 'feature', 'review', 'test', 'output'],
         'mobile-web': ['project', 'feature', 'output'],
         'pixel-game': ['project', 'image', 'handoff', 'game', 'output'],
         'image-flows': ['prompt', 'prompt_negative', 'sampler', 'image_output'],
+        'agent-orchestration': ['project', 'agent', 'agent', 'agent', 'merge', 'agent', 'output'],
       }
       for (const name of names) {
         const t = WORKFLOW_TEMPLATES[name]
@@ -5223,12 +5347,23 @@ async function imageChainTests(): Promise<void> {
       assert(
         WORKFLOW_TEMPLATES['desktop-app'].nodes[4].preset?.buildTarget === 'exe' &&
           WORKFLOW_TEMPLATES['mobile-web'].nodes[2].preset?.buildTarget === 'web' &&
-          WORKFLOW_TEMPLATES['pixel-game'].nodes[4].preset?.buildTarget === 'game',
+          WORKFLOW_TEMPLATES['pixel-game'].nodes[4].preset?.buildTarget === 'game' &&
+          WORKFLOW_TEMPLATES['agent-orchestration'].nodes[6].preset?.buildTarget === 'exe',
         '模板输出节点带正确打包目标(exe/web/game)',
       )
       assert(
         WORKFLOW_TEMPLATES['image-flows'].edges.length === 3,
         '生图模板 3 条连线(正→采样,负→采样,采样→输出)',
+      )
+      // agent-orchestration(v0.6.1):编排模板的结构承诺
+      const orch = WORKFLOW_TEMPLATES['agent-orchestration']
+      assert(orch.workspace === 'app', '编排模板归属软件制作工作区')
+      assert(orch.nodes[1].preset?.agentRole !== undefined && orch.nodes[1].preset?.maxRounds === 2, '规划智能体带角色与轮次预置')
+      assert(orch.nodes[3].preset?.mode === 'parallel', '执行支路 B 是并行模式')
+      assert(orch.edges.length === 7, `编排模板 7 条连线(实际 ${orch.edges.length})`)
+      assert(
+        orch.edges.some(([f]) => f === 1) && orch.edges.some(([, t]) => t === 0) === false,
+        '规划智能体有出边、项目节点是源头(无入边)',
       )
     }
 
@@ -7723,6 +7858,9 @@ const main = async (): Promise<void> => {
 
   console.log('\n========== 21. 四类型行为零回归(注册表化后逐条不变) ==========')
   await nodesV2ZeroRegressionTests()
+
+  console.log('\n========== 21b. 工程化 agent 编排:agent 循环 / router 分支(零 LLM) ==========')
+  await agentOrchestrationTests()
 
   console.log('\n========== 22. 图像节点:两 provider / 取消 / S1·S2 攻击样例(零 LLM) ==========')
   await imageChainTests()

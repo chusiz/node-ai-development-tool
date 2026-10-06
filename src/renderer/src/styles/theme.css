@@ -454,6 +454,41 @@ button.linklike:hover:not(:disabled) {
   min-width: 0;
 }
 
+/* v0.6.1 路由面板:分支列表(标签 → 目标节点) */
+.kv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.kv-list > .k {
+  font-size: 11px;
+  color: var(--fg-2);
+}
+
+.kv-list .kv-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.kv-list .kv-row .k {
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.kv-list .kv-row .v {
+  color: var(--fg-1);
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
 .pathbox {
   font-family: var(--mono);
   font-size: 11.5px;
@@ -463,8 +498,7 @@ button.linklike:hover:not(:disabled) {
   border-radius: var(--radius-sm);
   padding: 8px 10px;
   word-break: break-all;
-  line-height: 1.5;
-}
+  line-height: 1.5;}
 
 .errbox {
   font-family: var(--mono);

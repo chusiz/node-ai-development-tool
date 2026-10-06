@@ -243,6 +243,21 @@ export type NodeConfig = {
    * 运行时(specFromGraph)会把它展开回平铺节点执行,语义与没封装过**完全一样**。
    */
   subgraph?: SubgraphTemplate
+
+  // ---- agent 专属(v0.6.1 工程化 agent 编排:带循环的智能体)----
+  /** 角色设定(系统提示):"你是规划师 / 审查员…"。空 = 不额外设定 */
+  agentRole?: string
+  /** 循环轮次上限 1..8,默认 3。输出含 doneHint 即提前收尾 */
+  maxRounds?: number
+  /** 完成标志:LLM 输出包含它即认为该智能体任务完成(默认「任务完成」) */
+  doneHint?: string
+
+  // ---- router 专属(v0.6.1 工程化 agent 编排:LLM 智能路由)----
+  /**
+   * 分支标签,顺序 = 出边顺序:第 i 个标签描述第 i 条出边。
+   * LLM 看完上游成果后选一条分支激活,其余分支自动跳过。
+   */
+  routes?: string[]
 }
 
 /**

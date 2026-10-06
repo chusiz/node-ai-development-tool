@@ -13,6 +13,8 @@ import { VideoConfig } from './VideoConfig'
 import { HandoffConfig } from './HandoffConfig'
 import { SubgraphConfig } from './SubgraphConfig'
 import { PromptConfig, NegativeConfig, SamplerConfig, ImageOutputConfig } from './ImageFlowConfigs'
+import { AgentConfig } from './AgentConfig'
+import { RouterConfig } from './RouterConfig'
 
 /**
  * kind → 配置面板。与 `flow/nodeTypes.ts` **对称**:
@@ -41,4 +43,6 @@ export const PANEL_BY_KIND: Record<NodeKind, (p: { nodeId: string }) => JSX.Elem
   prompt_negative: NegativeConfig,
   sampler: SamplerConfig,
   image_output: ImageOutputConfig,
+  agent: AgentConfig,
+  router: RouterConfig,
 }

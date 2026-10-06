@@ -109,6 +109,14 @@ export interface WorkflowNodeSpec {
   gameEngine?: 'godot'
   /** video 专属(内置动作) */
   videoParams?: VideoParams
+  /** agent 专属(v0.6.1):角色设定(系统提示) */
+  agentRole?: string
+  /** agent 专属:循环轮次上限(1..8) */
+  maxRounds?: number
+  /** agent 专属:完成标志(输出含它即收尾) */
+  doneHint?: string
+  /** router 专属:分支标签(顺序 = 出边顺序) */
+  routes?: string[]
 }
 
 export interface WorkflowEdgeSpec {
@@ -431,8 +439,26 @@ export function defaultPromptFor(kind: string): string {
   if (kind === 'merge') return DEFAULT_MERGE_TEMPLATE
   if (kind === 'review') return DEFAULT_REVIEW_TEMPLATE
   if (kind === 'doc') return DEFAULT_DOC_TEMPLATE
+  if (kind === 'router') return DEFAULT_ROUTER_TEMPLATE
   return '{{input}}'
 }
+
+/**
+ * 路由节点的默认提示词(v0.6.1)。
+ *
+ * 要求 LLM 只输出分支编号,由 runner 的 parseRouterPick 解析(带标签兜底)。
+ * 模板里同时给出编号和标签两条线索,LLM 拿标签说人话、编号做机器可读输出。
+ */
+const DEFAULT_ROUTER_TEMPLATE = `上游成果(材料)如下:
+
+{{input}}
+
+下面这些分支,只允许选一条(其余分支将被跳过):
+{{routes}}
+
+请只输出一行,内容为你要选的那条分支的编号(如「分支1」)或分支名。
+不要解释,不要输出别的。
+`;
 
 /**
  * 子图嵌套的展开轮数上限。
@@ -865,6 +891,11 @@ export function specFromGraph(args: {
         videoParams: def.action === 'video' ? n.data.videoParams : undefined,
         testCommand: def.action === 'test' ? n.data.testCommand : undefined,
         testTimeoutSec: def.action === 'test' ? n.data.testTimeoutSec : undefined,
+        // v0.6.1 工程化 agent 编排:会话节点上的编排字段(agent 循环 / router 分支)
+        agentRole: isSession && kind === 'agent' ? (n.data.agentRole ?? '') : undefined,
+        maxRounds: isSession && kind === 'agent' ? (n.data.maxRounds ?? 3) : undefined,
+        doneHint: isSession && kind === 'agent' ? (n.data.doneHint ?? '任务完成') : undefined,
+        routes: isSession && kind === 'router' ? (Array.isArray(n.data.routes) ? n.data.routes.map(String) : []) : undefined,
       }
     }),
     edges: expanded.edges.map((e) => ({ source: e.source, target: e.target })),
@@ -930,6 +961,12 @@ export interface NodeSpecSource {
   negativeText?: string
   /** subgraph 专属:被封起来的那段图(specFromGraph 会展开成平铺节点) */
   subgraph?: SubgraphTemplate
+  /** agent 专属(v0.6.1):角色设定 / 最大轮次 / 完成标志 */
+  agentRole?: string
+  maxRounds?: number
+  doneHint?: string
+  /** router 专属(v0.6.1):分支标签(顺序 = 出边顺序) */
+  routes?: string[]
 }
 
 export interface GraphIssue {

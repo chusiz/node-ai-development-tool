@@ -88,6 +88,8 @@ export type NodeIconName =
   | 'prompt'
   | 'sampler'
   | 'image_output'
+  | 'agent'
+  | 'router'
 
 /** 类型角标:图标 + 文字 + 颜色类(+ 可选 tooltip) */
 export interface NodeBadge {
@@ -740,6 +742,109 @@ export const NODE_TYPES = {
       return out
     },
   },
+  agent: {
+    // ★ 工程化 agent 编排(v0.6.1):带循环的 Agent 节点。
+    // 首轮 = 正常会话;后续轮把上轮产出续聊,直到输出含 doneHint 或轮次到顶。
+    // 适合"规划 → 迭代 → 自检"这类一个角色反复打磨的任务。
+    label: '智能体',
+    badge: {
+      icon: 'agent',
+      text: '智能体',
+      cls: 'kind-agent',
+      title: '带循环的 Agent:同一角色多轮迭代(自检/打磨),输出含完成标志即收尾',
+    },
+    ports: { target: 1, source: 1 },
+    executor: 'session',
+    payload: 'handoff',
+    defaultTitle: '智能体节点',
+    addEntries: [
+      {
+        key: 'agent',
+        label: '智能体(循环)',
+        icon: 'agent',
+        hint: '同一角色多轮迭代:直到输出含「完成标志」或达到最大轮次',
+        preset: { maxRounds: 3, doneHint: '任务完成' },
+      },
+      {
+        key: 'agent-parallel',
+        label: '智能体(并行)',
+        icon: 'parallel',
+        hint: '独立支路的智能体(并行跑,不自动注入上游产出)',
+        preset: { mode: 'parallel', maxRounds: 3, doneHint: '任务完成' },
+      },
+    ],
+    defaultConfig: { maxRounds: 3, doneHint: '任务完成', agentRole: '' },
+    normalize: (m, raw) => ({
+      ...m,
+      maxRounds: clampRounds(raw.maxRounds),
+      doneHint: typeof raw.doneHint === 'string' && raw.doneHint.trim() ? raw.doneHint.trim() : '任务完成',
+      agentRole: typeof raw.agentRole === 'string' ? raw.agentRole : '',
+      mode: raw.mode === 'parallel' ? 'parallel' : 'serial',
+    }),
+    validate: (ctx) => {
+      const out: GraphIssue[] = []
+      if ((ctx.data.mode ?? 'serial') !== 'serial') return out
+      if (ctx.preds.length === 0) {
+        out.push({
+          level: 'warn',
+          nodeId: ctx.id,
+          message: `智能体节点「${ctx.data.title || ctx.id}」是串行模式,建议接在某个节点后面(串行 = 在上游成果上迭代)`,
+        })
+      }
+      return out
+    },
+  },
+  router: {
+    // ★ 工程化 agent 编排(v0.6.1):LLM 智能路由节点。
+    // 一轮会话后从出边里选中一条分支激活,其余分支自动跳过 —— 实现条件分支。
+    // 分支标签(routes)顺序 = 出边顺序:第 i 个标签描述第 i 条出边。
+    label: '路由',
+    badge: {
+      icon: 'router',
+      text: '路由',
+      cls: 'kind-router',
+      title: 'LLM 智能路由:看完上游成果,从出边里选一条分支激活(其余自动跳过)',
+    },
+    ports: { target: 1, source: 1 },
+    executor: 'session',
+    payload: 'handoff',
+    defaultTitle: '路由节点',
+    addEntries: [
+      {
+        key: 'router',
+        label: '路由(分支)',
+        icon: 'router',
+        hint: 'LLM 看完上游成果后选一条出边分支激活,其余分支自动跳过',
+        preset: { routes: [] },
+      },
+    ],
+    defaultConfig: { routes: [] },
+    normalize: (m, raw) => ({
+      ...m,
+      routes: Array.isArray(raw.routes)
+        ? raw.routes.map((r) => String(r)).filter((r) => r.trim().length > 0)
+        : [],
+    }),
+    validate: (ctx) => {
+      const out: GraphIssue[] = []
+      if (ctx.succs.length < 2) {
+        out.push({
+          level: 'warn',
+          nodeId: ctx.id,
+          message: `路由节点「${ctx.data.title || ctx.id}」建议接 ${2} 条以上出边(每一条出边 = 一个分支,选中一条其余跳过)`,
+        })
+      }
+      const routes = Array.isArray(ctx.data.routes) ? ctx.data.routes : []
+      if (routes.length > 0 && routes.length !== ctx.succs.length) {
+        out.push({
+          level: 'warn',
+          nodeId: ctx.id,
+          message: `路由节点「${ctx.data.title || ctx.id}」有 ${routes.length} 个分支标签但 ${ctx.succs.length} 条出边 —— 标签顺序对应出边顺序,数量不一致时多余标签会被忽略`,
+        })
+      }
+      return out
+    },
+  },
   prompt: {
     // ★ 生图工作区(v0.5.0):正向提示词节点 —— 纯数据源,不执行任何动作
     label: '正向提示词',
@@ -993,6 +1098,8 @@ export type NodeKind =
   | 'prompt_negative'
   | 'sampler'
   | 'image_output'
+  | 'agent'
+  | 'router'
 
 /**
  * 取类型定义。未知 kind(手改 graph.json 写了 type:'foo')一律**回落 feature**
@@ -1028,6 +1135,13 @@ function clampTimeout(n: unknown): number {
   const v = Number(n)
   if (!Number.isFinite(v)) return 300
   return Math.max(5, Math.min(3600, Math.trunc(v)))
+}
+
+/** agent 节点循环轮次:夹到 1..8(磁盘值可能是任意数,与 clampN 同源守卫) */
+function clampRounds(n: unknown): number {
+  const v = Number(n)
+  if (!Number.isFinite(v)) return 3
+  return Math.max(1, Math.min(8, Math.trunc(v)))
 }
 
 /** 视频抽帧间隔(秒)夹到 1..300;取帧上限夹到 1..30 */
@@ -1130,6 +1244,8 @@ export const WORKSPACE_NODES: Record<WorkspaceId, readonly NodeKind[]> = {
     'video',
     'handoff',
     'subgraph',
+    'agent',
+    'router',
   ],
   image: ['prompt', 'prompt_negative', 'sampler', 'image_output', 'handoff'],
 }
@@ -1290,6 +1406,29 @@ export const WORKFLOW_TEMPLATES: Record<string, WorkflowTemplate> = {
       [0, 2],
       [1, 2],
       [2, 3],
+    ],
+  },
+  'agent-orchestration': {
+    label: '智能体编排',
+    desc: '规划智能体 → 两条并行执行支路 → 整合 → 审查智能体 → 输出 exe(工程化 agent 编排示例)',
+    workspace: 'app',
+    nodes: [
+      { kind: 'project', title: '项目 1', pos: { x: 40, y: 60 }, preset: { brief: '一个待开发的桌面小工具(可先按简单原型实现)' } },
+      { kind: 'agent', title: '规划智能体', pos: { x: 320, y: 60 }, preset: { agentRole: '你是项目规划师:把需求拆成两份互不重叠的实现清单,每份给出文件级改动方案', maxRounds: 2, doneHint: '任务完成' } },
+      { kind: 'agent', title: '执行支路 A', pos: { x: 620, y: 20 }, preset: { agentRole: '你是后端工程师:实现规划清单 A 对应的代码,改动尽量内聚', maxRounds: 2, doneHint: '任务完成' } },
+      { kind: 'agent', title: '执行支路 B(并行)', pos: { x: 620, y: 220 }, preset: { mode: 'parallel', agentRole: '你是前端工程师:实现规划清单 B 对应的代码,改动尽量内聚', maxRounds: 2, doneHint: '任务完成' } },
+      { kind: 'merge', title: '整合 1', pos: { x: 960, y: 120 } },
+      { kind: 'agent', title: '审查智能体', pos: { x: 1240, y: 120 }, preset: { agentRole: '你是资深代码审查员:检查合并后的项目能否编译、有无明显 bug 与安全问题,输出一份问题清单;没有问题则说“任务完成”', maxRounds: 2, doneHint: '任务完成' } },
+      { kind: 'output', title: '输出 1(exe)', pos: { x: 1520, y: 120 }, preset: { buildTarget: 'exe' } },
+    ],
+    edges: [
+      [0, 1],
+      [1, 2],
+      [1, 3],
+      [2, 4],
+      [3, 4],
+      [4, 5],
+      [5, 6],
     ],
   },
 }

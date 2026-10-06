@@ -930,6 +930,17 @@ button.ghost.on {
 .agent-node.kind-video { border-left: 3px solid #2f9fa5; }
 .agent-node.kind-handoff { border-left: 3px solid #c98a2f; }
 .agent-node.kind-subgraph { border-left: 3px solid #5c7ab8; }
+/* v0.6.1 工程化 agent 编排:智能体(循环)青绿 / 路由(分支)玫红 */
+.node-kind-badge.kind-agent {
+  border-color: #2f9fa5;
+  color: #a8e4ec;
+}
+.node-kind-badge.kind-router {
+  border-color: #b34a7a;
+  color: #f0a8c8;
+}
+.agent-node.kind-agent { border-left: 3px solid #2f9fa5; }
+.agent-node.kind-router { border-left: 3px solid #b34a7a; }
 
 /* ---------- 子图:配置面板里的内部节点清单 ---------- */
 .subgraph-list {

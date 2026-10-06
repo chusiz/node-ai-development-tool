@@ -135,6 +135,13 @@ interface GraphState {
 
   save(): Promise<void>
   toGraph(): CanvasGraph
+
+  /** 导出当前画布为工作流 JSON(ComfyUI 式,可分享/备份) */
+  exportWorkflow(): string
+  /** 从工作流 JSON 恢复画布(校验头 + 按注册表 normalize)。替换当前画布,可撤销 */
+  importWorkflow(json: string): { ok: boolean; error?: string }
+  /** 一键套用内置模板(生图模板只能在生图页套,软件模板在软件页) */
+  applyTemplate(name: string, workspace?: WorkspaceId): { ok: boolean; error?: string }
 }
 
 /*
@@ -465,7 +472,8 @@ export const useGraphStore = create<GraphState>((set, get) => {
       const nodes = wf.nodes
         .filter((n) => n && typeof n.id === 'string' && n.id)
         .map((n) => {
-          const kind = NODE_TYPES[n.type ?? ''] ? (n.type as NodeKind) : 'feature'
+          const t = n.type ?? ''
+          const kind = t in NODE_TYPES ? (t as NodeKind) : 'feature'
           const base = (n.data ?? {}) as Partial<NodeConfig>
           return {
             id: n.id as string,
@@ -482,7 +490,7 @@ export const useGraphStore = create<GraphState>((set, get) => {
       const edges = (wf.edges ?? [])
         .filter((e) => e && idSet.has(e.source ?? '') && idSet.has(e.target ?? ''))
         .map((e) => ({ id: e.id ?? `e-${e.source}-${e.target}`, source: e.source as string, target: e.target as string }))
-      set({ nodes, edges, selectedNodeId: null })
+      set({ nodes, edges })
       commitHistory(before)
       scheduleSave()
       return { ok: true }
@@ -499,7 +507,7 @@ export const useGraphStore = create<GraphState>((set, get) => {
           error: `模板「${tpl.label}」属于${tpl.workspace === 'image' ? '生图' : '软件制作'}页,请先切换到对应工作区再套用`,
         }
       }
-      set({ nodes: [], edges: [], selectedNodeId: null })
+      set({ nodes: [], edges: [] })
       const created: Record<number, string> = {}
       for (const [i, spec] of tpl.nodes.entries()) {
         const id = newCanvasNodeId()

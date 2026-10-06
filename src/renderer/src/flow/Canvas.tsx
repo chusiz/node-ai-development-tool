@@ -352,12 +352,13 @@ function CanvasInner(): JSX.Element {
                 onClick={() => {
                   setWfMenuOpen(false)
                   void (async () => {
-                    const path = await window.api.dialog.saveFile(
+                    const res = await window.api.dialog.saveFile(
                       '导出工作流',
                       'workflow.json',
                       [{ name: 'chusiz 工作流', extensions: ['json'] }],
                     )
-                    if (!path) return
+                    if (!res.ok || !res.data) return
+                    const path = res.data
                     const ok = await window.api.fs.writeText(path, exportWorkflow())
                     if (ok.ok) alert(`工作流已导出:${path}`)
                     else alert(`导出失败:${ok.error ?? '未知错误'}`)
@@ -371,17 +372,18 @@ function CanvasInner(): JSX.Element {
                 onClick={() => {
                   setWfMenuOpen(false)
                   void (async () => {
-                    const path = await window.api.dialog.pickFile('导入工作流', [
+                    const res = await window.api.dialog.pickFile('导入工作流', [
                       { name: 'chusiz 工作流', extensions: ['json'] },
                       { name: '全部文件', extensions: ['*'] },
                     ])
-                    if (!path) return
-                    const res = await window.api.fs.readText(path)
-                    if (!res.ok) {
-                      alert(`读取失败:${res.error ?? '未知错误'}`)
+                    if (!res.ok || !res.data) return
+                    const path = res.data
+                    const rd = await window.api.fs.readText(path)
+                    if (!rd.ok) {
+                      alert(`读取失败:${rd.error ?? '未知错误'}`)
                       return
                     }
-                    const imp = importWorkflow(res.data)
+                    const imp = importWorkflow(rd.data)
                     alert(imp.ok ? `工作流已导入(${useGraphStore.getState().nodes.length} 个节点)` : imp.error ?? '导入失败')
                   })()
                 }}
