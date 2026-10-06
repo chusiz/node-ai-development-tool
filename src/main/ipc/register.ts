@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, webContents } from 'electron'
+import fsp from 'node:fs/promises'
 import {
   CH,
   EV,
@@ -12,6 +13,7 @@ import {
   type SettingsPayload,
   type StartRequest,
   type WorkflowSpec,
+  type FileFilter,
 } from '../../shared/ipc'
 import { pathsInfo } from '../paths'
 import { getAdapter, hasAdapter } from '../agents/registry'
@@ -495,21 +497,51 @@ export function createIpc(): {
     }),
   )
 
-  handle(CH.dialogPickFile, (title?: string) =>
+  handle(CH.dialogPickFile, (title?: string, filters?: FileFilter[]) =>
     withDialog(async () => {
       const win = parentWindow()
       const opts: Electron.OpenDialogOptions = {
         title: title ?? '选择可执行文件',
         properties: ['openFile'],
-        filters: [
-          { name: '可执行文件', extensions: ['exe', 'cmd', 'bat'] },
-          { name: '全部文件', extensions: ['*'] },
-        ],
+        filters:
+          filters && filters.length > 0
+            ? filters
+            : [
+                { name: '可执行文件', extensions: ['exe', 'cmd', 'bat'] },
+                { name: '全部文件', extensions: ['*'] },
+              ],
       }
       const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
       return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
     }),
   )
+
+  handle(CH.dialogSaveFile, (title?: string, defaultName?: string, filters?: FileFilter[]) =>
+    withDialog(async () => {
+      const win = parentWindow()
+      const opts: Electron.SaveDialogOptions = {
+        title: title ?? '保存文件',
+        defaultPath: defaultName ?? 'untitled.json',
+        filters:
+          filters && filters.length > 0
+            ? filters
+            : [{ name: '全部文件', extensions: ['*'] }],
+      }
+      const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+      return res.canceled || !res.filePath ? null : res.filePath
+    }),
+  )
+
+  handle(CH.fsWriteText, async (filePath: string, content: string) => {
+    if (!filePath || typeof filePath !== 'string') throw new Error('缺少文件路径')
+    await fsp.writeFile(filePath, String(content), 'utf8')
+    return { written: true as const }
+  })
+
+  handle(CH.fsReadText, async (filePath: string) => {
+    if (!filePath || typeof filePath !== 'string') throw new Error('缺少文件路径')
+    return await fsp.readFile(filePath, 'utf8')
+  })
 
   handle(CH.shellOpenPath, async (p: string) => {
     const err = await shell.openPath(p)

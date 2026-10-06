@@ -237,11 +237,23 @@ export async function packageProject(
     // ★ 游戏项目打包(v0.4.1):Godot 项目是"文件夹即项目" —— 交付形态 = zip。
     return await zipGameProject(req, ctl)
   }
+  if (req.buildTarget === 'web') {
+    // ★ Web 静态站点打包(v0.6.0):跑构建脚本 → 定位静态产物 → zip 交付。
+    // 参考 n8n / Langflow 的"产物即部署物"思路:web 产物 = 一份可托管的静态站点,
+    // 可直接拖进任意静态托管,或用手机浏览器打开(即 PWA 入口)。
+    return await packageWeb(req, ctl)
+  }
+  if (req.buildTarget === 'apk') {
+    // ★ Android 打包(v0.6.0):有 Android SDK + Gradle 就走 Capacitor 真打 APK;
+    // 缺工具链时**优雅降级**为 Web 应用包(PWA),不空手失败 ——
+    // 参考 Dify / n8n 的"环境不足先给可用产物"策略。
+    return await packageApk(req, ctl)
+  }
   if (req.buildTarget !== 'exe') {
     return {
       ok: false,
       log: '',
-      error: `打包目标 ${req.buildTarget} 暂不可用(P0 仅支持 exe)`,
+      error: `打包目标 ${req.buildTarget} 暂不可用(支持:exe / web / apk / game)`,
     }
   }
   if (!req.projectDir || !req.projectDir.trim()) {
@@ -310,4 +322,308 @@ export async function packageProject(
   }
   req.onProgress?.(`[内置打包] 产物:${artifact}`)
   return { ok: true, artifactPath: artifact, log: log.text() }
+}
+
+/**
+ * 定位"构建产物目录":优先用户指定,否则按常见约定探测(找到含 index.html 的那个)。
+ * 参考 Langflow/ComfyUI 的产物约定:dist / build / out / www 是最普遍的四套。
+ */
+async function locateWebOut(projectDir: string, outDir?: string): Promise<string | null> {
+  const candidates = [outDir, 'dist', 'build', 'out', 'www'].filter(
+    (d): d is string => !!d && d.trim() !== '',
+  )
+  for (const c of candidates) {
+    const dir = path.isAbsolute(c) ? c : path.join(projectDir, c)
+    try {
+      const st = await fsp.stat(path.join(dir, 'index.html'))
+      if (st.isFile()) return dir
+    } catch {
+      /* 该目录没有 index.html → 试下一个 */
+    }
+  }
+  return null
+}
+
+/** 用 PowerShell Compress-Archive 把目录打成 zip(排除列表按用途传入) */
+async function zipDir(
+  srcDir: string,
+  zipPath: string,
+  excludeNames: string[],
+  onLine: (l: string) => void,
+  ctl: ProcControl,
+): Promise<void> {
+  const q = (s: string): string => `'${s.replace(/'/g, "''")}'`
+  const ex = excludeNames.map((n) => `$_.Name -ne '${n.replace(/'/g, "''")}'`).join(' -and ')
+  const ps = [
+    `$items = Get-ChildItem -LiteralPath ${q(srcDir)} -Force | Where-Object { ${ex} }`,
+    `if ($items.Count -eq 0) { Write-Error '目录里没有可打包的内容'; exit 1 }`,
+    `Compress-Archive -Path $items.FullName -DestinationPath ${q(zipPath)} -CompressionLevel Optimal`,
+  ].join('; ')
+  await new Promise<void>((resolve, reject) => {
+    const child: ChildProcess = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps],
+      { windowsHide: true },
+    )
+    ctl.register(child)
+    let errTail = ''
+    child.stderr?.on('data', (d: Buffer) => {
+      errTail = (errTail + d.toString()).slice(-2000)
+    })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      ctl.unregister()
+      if (ctl.isKilled()) {
+        resolve()
+        return
+      }
+      if (code === 0) resolve()
+      else reject(new Error(`PowerShell 退出码 ${code ?? '未知'}${errTail ? ' · ' + errTail.slice(0, 300) : ''}`))
+    })
+  }).catch((e: unknown) => {
+    if (ctl.isKilled()) return
+    throw e
+  })
+}
+
+/**
+ * Web 静态站点打包(v0.6.0):
+ *   ① 项目有 build 脚本 → 先跑前置构建(与 exe 链路同款);
+ *   ② 定位静态产物目录(含 index.html);
+ *   ③ 打成 `<项目>/dist/<name>-web-<ts>.zip`。
+ * 交付物解压即是一份可托管站点 —— 拖进任意静态托管 / 手机浏览器打开即可用。
+ */
+async function packageWeb(req: BuiltinActionRequest, ctl: ProcControl): Promise<BuiltinActionResult> {
+  const log = new LogTail()
+  const onLine = (line: string): void => {
+    log.push(line)
+    req.onProgress?.(line)
+  }
+  if (!req.projectDir || !req.projectDir.trim()) {
+    return { ok: false, log: '', error: '没有指定项目文件夹 —— 请先在项目节点上选择项目文件夹' }
+  }
+  const projectDir = req.projectDir.trim()
+  const outDir = path.join(projectDir, 'dist')
+  await fsp.mkdir(outDir, { recursive: true }).catch(() => undefined)
+
+  const appName = (req.buildOptions?.appName ?? '').trim() || 'web-app'
+  const safeName = appName.replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '') || 'web-app'
+
+  // ① 前置 build
+  if (hasBuildScript(projectDir)) {
+    onLine('[Web 打包] 检测到 build 脚本,先执行前置构建…')
+    const build = await runNodeProcess(['--run', 'build'], projectDir, onLine, ctl)
+    if (build.killed) return cancelledResult(log.text())
+    if (build.code !== 0) {
+      return { ok: false, log: log.text(), error: `前置 build 失败(退出码 ${build.code ?? '未知'}),请查看打包日志` }
+    }
+  }
+
+  // ② 定位产物
+  const webOut = await locateWebOut(projectDir, req.buildOptions?.outDir)
+  let zipPath = ''
+  if (webOut) {
+    zipPath = path.join(outDir, `${safeName}-web-${Date.now()}.zip`)
+    onLine(`[Web 打包] 产物目录 ${webOut} → ${zipPath}`)
+    await zipDir(webOut, zipPath, ['node_modules', '.git', 'env'], onLine, ctl)
+  } else {
+    // 没有构建产物:项目根本身就是静态站点(根目录 index.html)→ 整项目打包
+    const rootIndex = path.join(projectDir, 'index.html')
+    try {
+      const st = await fsp.stat(rootIndex)
+      if (!st.isFile()) throw new Error('no index.html')
+      zipPath = path.join(outDir, `${safeName}-web-${Date.now()}.zip`)
+      onLine(`[Web 打包] 未发现构建产物,项目根即静态站点 → ${zipPath}`)
+      await zipDir(projectDir, zipPath, ['node_modules', '.git', 'dist', 'env', 'data', '.godot'], onLine, ctl)
+    } catch {
+      return {
+        ok: false,
+        log: log.text(),
+        error:
+          '没有找到可打包的 Web 产物:项目既没有 build 脚本/产物目录(dist/build/out/www),根目录也没有 index.html。请让软件节点产出 Web 应用(带 index.html),或先手动构建一次。',
+      }
+    }
+  }
+
+  if (ctl.isKilled()) return cancelledResult(log.text())
+  let st
+  try {
+    st = await fsp.stat(zipPath)
+  } catch {
+    return { ok: false, log: log.text(), error: '压缩完成但找不到 zip 产物 —— 请检查输出目录' }
+  }
+  if (!st.isFile() || st.size === 0) {
+    return { ok: false, log: log.text(), error: 'zip 产物为空 —— 构建产物目录里可能没有内容' }
+  }
+  onLine(`✔ Web 打包完成:${zipPath}(${(st.size / 1024 / 1024).toFixed(1)} MB)`)
+  return {
+    ok: true,
+    artifactPath: zipPath,
+    log:
+      log.text() +
+      '\n[Web 打包] 这是一份静态站点:解压后拖进任意静态托管(Nginx / GitHub Pages / Vercel)即可上线;' +
+      '也可放到手机/服务器上直接访问 —— 这就是移动端入口。',
+  }
+}
+
+/** 探测本机 Android SDK 根目录(常见三处:环境变量 / 本地 AppData) */
+function detectAndroidSdk(): string | null {
+  const env = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT
+  if (env && env.trim()) return env.trim()
+  const local = path.join(process.env.LOCALAPPDATA ?? '', 'Android', 'Sdk')
+  try {
+    return fs.statSync(local).isDirectory() ? local : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Android 打包(v0.6.0):
+ *   ① 有 Android SDK → 项目跑 Capacitor 链路(add android + sync + gradle assembleDebug)真打 APK;
+ *   ② 无 SDK / 无 Capacitor 依赖 → 自动降级为 Web 应用包(PWA),并在日志里给出两条安装路径:
+ *       手机浏览器直接打开 / 装好 SDK 后重试。
+ */
+async function packageApk(req: BuiltinActionRequest, ctl: ProcControl): Promise<BuiltinActionResult> {
+  const log = new LogTail()
+  const onLine = (line: string): void => {
+    log.push(line)
+    req.onProgress?.(line)
+  }
+  if (!req.projectDir || !req.projectDir.trim()) {
+    return { ok: false, log: '', error: '没有指定项目文件夹 —— 请先在项目节点上选择项目文件夹' }
+  }
+  const projectDir = req.projectDir.trim()
+
+  const sdk = detectAndroidSdk()
+  if (!sdk) {
+    // 优雅降级:先出 Web 包,再给路径
+    onLine('[APK 打包] 未检测到 Android SDK —— 自动降级为 Web 应用包(PWA)')
+    const web = await packageWeb(req, ctl)
+    return {
+      ok: web.ok,
+      artifactPath: web.artifactPath,
+      log:
+        web.log +
+        '\n\n[APK 打包] 未检测到 Android SDK(ANDROID_HOME / %LOCALAPPDATA%\\Android\\Sdk)。' +
+        '已降级产出 Web 应用包:解压后用手机浏览器打开即可使用(或部署到任意静态托管后扫码访问)。' +
+        '要产出真正的 .apk:安装 Android Studio(含 SDK)后重试本节点,或将 Web 应用经 Capacitor 打包。',
+      error: web.ok ? undefined : web.error,
+    }
+  }
+
+  // 项目里要有 Capacitor 依赖
+  let hasCapacitor = false
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(projectDir, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, unknown>
+    }
+    hasCapacitor = Object.keys(pkg.dependencies ?? {}).some((k) => k.startsWith('@capacitor/'))
+  } catch {
+    hasCapacitor = false
+  }
+  if (!hasCapacitor) {
+    onLine('[APK 打包] 项目没有安装 Capacitor —— 先注入依赖再打包')
+    const install = await runNodeProcess(
+      ['install', '@capacitor/core', '@capacitor/cli', '@capacitor/android', '--no-save'],
+      projectDir,
+      onLine,
+      ctl,
+    )
+    if (install.killed) return cancelledResult(log.text())
+    if (install.code !== 0) {
+      return {
+        ok: false,
+        log: log.text(),
+        error: `安装 Capacitor 失败(退出码 ${install.code ?? '未知'})。请让软件节点在 package.json 里带上 @capacitor 依赖,或手动 npm install。`,
+      }
+    }
+  }
+
+  const appName = (req.buildOptions?.appName ?? '').trim() || 'app'
+  const appId = (req.buildOptions?.appId ?? '').trim() || 'com.chusiz.app'
+  onLine('[APK 打包] 初始化 Android 平台(capacitor add android)…')
+  const add = await runNodeProcess(
+    ['--run', 'cap', '--', 'add', 'android'],
+    projectDir,
+    onLine,
+    ctl,
+  )
+  // add 失败(平台已存在等)不致命 —— sync 会自己处理
+  if (!add.killed && add.code !== 0) onLine(`[APK 打包] capacitor add 返回 ${add.code}(已存在则无碍),继续 sync…`)
+
+  const sync = await runNodeProcess(['--run', 'cap', '--', 'sync', 'android'], projectDir, onLine, ctl)
+  if (sync.killed) return cancelledResult(log.text())
+  if (sync.code !== 0) {
+    return {
+      ok: false,
+      log: log.text(),
+      error: `capacitor sync 失败(退出码 ${sync.code ?? '未知'})。请检查项目能否正常构建 Web 产物(需先 npm run build)。`,
+    }
+  }
+
+  onLine('[APK 打包] 执行 Gradle 构建(assembleDebug)…')
+  const androidDir = path.join(projectDir, 'android')
+  const gradlew = path.join(androidDir, 'gradlew.bat')
+  const apk = await new Promise<string | null>((resolve, reject) => {
+    // gradlew.bat 是批处理:必须经 cmd.exe 显式解释(shell:false 下这是标准做法,
+    // 不用 shell:true —— 那样会把整条命令交给 cmd 的引号解析)。
+    const child: ChildProcess = spawn(
+      'cmd.exe',
+      ['/d', '/s', '/c', `"${gradlew}" assembleDebug --no-daemon`],
+      {
+        cwd: androidDir,
+        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, ANDROID_HOME: sdk },
+        windowsHide: true,
+      },
+    )
+    ctl.register(child)
+    child.stdout?.setEncoding('utf8')
+    child.stderr?.setEncoding('utf8')
+    const pump = (d: string): void => {
+      const line = d.trim()
+      if (line) {
+        onLine(line)
+        log.push(line)
+      }
+    }
+    child.stdout?.on('data', pump)
+    child.stderr?.on('data', pump)
+    child.on('error', reject)
+    child.on('close', (code) => {
+      ctl.unregister()
+      if (ctl.isKilled()) {
+        resolve(null)
+        return
+      }
+      if (code !== 0) {
+        reject(new Error(`Gradle 退出码 ${code ?? '未知'}`))
+        return
+      }
+      resolve(null)
+    })
+  }).then(async () => {
+    // 定位产物:android/app/build/outputs/apk/debug/app-debug.apk
+    const base = path.join(projectDir, 'android', 'app', 'build', 'outputs', 'apk', 'debug')
+    const files = await fsp.readdir(base).catch(() => [] as string[])
+    const apkFile = files.find((f) => f.endsWith('.apk'))
+    return apkFile ? path.join(base, apkFile) : null
+  }).catch((e: unknown) => {
+    if (ctl.isKilled()) return null
+    onLine(`[APK 打包] Gradle 构建失败:${e instanceof Error ? e.message : String(e)}`)
+    return null
+  })
+
+  if (ctl.isKilled()) return cancelledResult(log.text())
+  if (!apk) {
+    return {
+      ok: false,
+      log: log.text(),
+      error: 'Gradle 构建未产出 .apk 文件 —— 请查看日志,或在 android/ 目录手动运行 gradlew assembleDebug 排查。',
+    }
+  }
+  onLine(`✔ APK 打包完成:${apk}`)
+  return { ok: true, artifactPath: apk, log: log.text() }
 }

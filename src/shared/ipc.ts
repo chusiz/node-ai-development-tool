@@ -10,6 +10,8 @@ import type { ProbeReport, ProbeResult, ProbeVerdict } from './probe'
 
 export type { PersistedRecord, LogRecord, NodeMetaSnapshot } from './log'
 export type { ModelDef, ProviderDef, ProviderProtocol, ProviderGroup } from './providers'
+/** 文件选择/保存对话框的过滤器,与 Electron 的 OpenDialogOptions.filters 同形 */
+export type FileFilter = { name: string; extensions: string[] }
 /* 可搜索模型框的候选类型。纯类型,渲染进程按值引的是 shared/providers 那侧 */
 export type { ModelCandidate, ModelSource } from './providers'
 export type { SecretStatus, ProviderTestResult } from './secrets'
@@ -106,6 +108,9 @@ export const CH = {
   canvasSave: 'canvas:save',
   dialogPickDirectory: 'dialog:pickDirectory',
   dialogPickFile: 'dialog:pickFile',
+  dialogSaveFile: 'dialog:saveFile',
+  fsWriteText: 'fs:writeText',
+  fsReadText: 'fs:readText',
   shellOpenPath: 'shell:openPath',
   /**
    * 缩略图只读通道(v0.3.0 新增,S2)。渲染端不直接碰 fs ——
@@ -628,7 +633,16 @@ export interface RendererApi {
   dialog: {
     /** 打开系统文件夹选择器。取消返回 null */
     pickDirectory(title?: string, defaultPath?: string): Promise<Envelope<string | null>>
-    pickFile(title?: string): Promise<Envelope<string | null>>
+    /** 打开系统文件选择器。取消返回 null */
+    pickFile(title?: string, filters?: FileFilter[]): Promise<Envelope<string | null>>
+    /** 打开系统保存对话框。取消返回 null */
+    saveFile(title?: string, defaultName?: string, filters?: FileFilter[]): Promise<Envelope<string | null>>
+  }
+  fs: {
+    /** 把文本写入文件(utf8)。工作流导出用 */
+    writeText(filePath: string, content: string): Promise<Envelope<{ written: true }>>
+    /** 读取文本文件(utf8)。工作流导入用 */
+    readText(filePath: string): Promise<Envelope<string>>
   }
   shell: {
     /** 在资源管理器里打开这个路径 */

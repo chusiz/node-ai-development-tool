@@ -46,7 +46,9 @@ export interface BuildOptions {
   outDir?: string
   icon?: string
   compress?: boolean
-  /** 高级:自定义打包命令,留空 = 走内置 electron-builder 链路。P0 灰置(归 P1) */
+  /** Android 应用包名,如 com.example.app(apk 目标用,默认 com.chusiz.app) */
+  appId?: string
+  /** 高级:自定义打包命令,留空 = 走内置打包链路。exe/apk 当前仍走内置链路 */
   customCommand?: string
 }
 

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { CH, EV, type RendererApi } from '../shared/ipc'
+import { CH, EV, type FileFilter, type RendererApi } from '../shared/ipc'
 
 /**
  * 订阅统一返回**退订函数**。
@@ -95,7 +95,13 @@ const api: RendererApi = {
   dialog: {
     pickDirectory: (title?: string, defaultPath?: string) =>
       ipcRenderer.invoke(CH.dialogPickDirectory, title, defaultPath),
-    pickFile: (title?: string) => ipcRenderer.invoke(CH.dialogPickFile, title),
+    pickFile: (title?: string, filters?: FileFilter[]) => ipcRenderer.invoke(CH.dialogPickFile, title, filters),
+    saveFile: (title?: string, defaultName?: string, filters?: FileFilter[]) =>
+      ipcRenderer.invoke(CH.dialogSaveFile, title, defaultName, filters),
+  },
+  fs: {
+    writeText: (filePath, content) => ipcRenderer.invoke(CH.fsWriteText, filePath, content),
+    readText: (filePath) => ipcRenderer.invoke(CH.fsReadText, filePath),
   },
   shell: {
     openPath: (p: string) => ipcRenderer.invoke(CH.shellOpenPath, p),

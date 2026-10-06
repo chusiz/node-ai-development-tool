@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type JSX, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX, type KeyboardEvent } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -20,7 +20,7 @@ import { nodeTypes } from './nodeTypes'
 import { edgeTypes } from './edgeTypes'
 import { setCanvasBridge } from '../lib/shortcuts'
 import { deleteNodeWithConfirm } from '../lib/nodeOps'
-import { workspaceNodeList } from '../../../shared/nodeRegistry'
+import { workspaceNodeList, WORKFLOW_TEMPLATES, type WorkspaceId } from '../../../shared/nodeRegistry'
 import { Icon, NodeIcon } from '../components/Icons'
 import { ProbeCard } from './ProbeCard'
 import type { NodeConfig, NodeKind } from '../../../shared/canvas'
@@ -43,6 +43,15 @@ function CanvasInner(): JSX.Element {
    */
   const workspace = useUiStore((s) => s.workspace)
   const ADD_ENTRIES = useMemo(() => workspaceNodeList(workspace), [workspace])
+  /** 工作区可见的模板(生图页只列生图模板,软件页只列软件模板) */
+  const TEMPLATE_LIST = useMemo(
+    () => Object.entries(WORKFLOW_TEMPLATES).filter(([, t]) => t.workspace === workspace),
+    [workspace],
+  )
+  const [wfMenuOpen, setWfMenuOpen] = useState(false)
+  const exportWorkflow = useGraphStore((s) => s.exportWorkflow)
+  const importWorkflow = useGraphStore((s) => s.importWorkflow)
+  const applyTemplate = useGraphStore((s) => s.applyTemplate)
   const removeEdge = useGraphStore((s) => s.removeEdge)
   const encapsulate = useGraphStore((s) => s.encapsulate)
   const edgeError = useGraphStore((s) => s.edgeError)
@@ -322,6 +331,81 @@ function CanvasInner(): JSX.Element {
             删除选中
           </button>
         )}
+
+        {/*
+          工作流菜单(v0.6.0):导出 / 导入 / 模板。
+          参考 ComfyUI 的工作流 JSON(图可序列化、可分享)与 Langflow / Coze 的模板市场。
+        */}
+        <div className="wf-wrap" style={{ position: 'relative' }}>
+          <button
+            title="工作流:导出/导入 JSON、一键套用模板"
+            aria-expanded={wfMenuOpen}
+            onClick={() => setWfMenuOpen((v) => !v)}
+          >
+            <Icon name="subgraph" size={12} />
+            工作流
+          </button>
+          {wfMenuOpen && (
+            <div className="wf-menu">
+              <button
+                title="把当前画布保存成 .json 文件,可分享 / 备份"
+                onClick={() => {
+                  setWfMenuOpen(false)
+                  void (async () => {
+                    const path = await window.api.dialog.saveFile(
+                      '导出工作流',
+                      'workflow.json',
+                      [{ name: 'chusiz 工作流', extensions: ['json'] }],
+                    )
+                    if (!path) return
+                    const ok = await window.api.fs.writeText(path, exportWorkflow())
+                    if (ok.ok) alert(`工作流已导出:${path}`)
+                    else alert(`导出失败:${ok.error ?? '未知错误'}`)
+                  })()
+                }}
+              >
+                导出工作流 (.json)
+              </button>
+              <button
+                title="从 .json 文件恢复一张画布(会替换当前画布,可用撤销找回)"
+                onClick={() => {
+                  setWfMenuOpen(false)
+                  void (async () => {
+                    const path = await window.api.dialog.pickFile('导入工作流', [
+                      { name: 'chusiz 工作流', extensions: ['json'] },
+                      { name: '全部文件', extensions: ['*'] },
+                    ])
+                    if (!path) return
+                    const res = await window.api.fs.readText(path)
+                    if (!res.ok) {
+                      alert(`读取失败:${res.error ?? '未知错误'}`)
+                      return
+                    }
+                    const imp = importWorkflow(res.data)
+                    alert(imp.ok ? `工作流已导入(${useGraphStore.getState().nodes.length} 个节点)` : imp.error ?? '导入失败')
+                  })()
+                }}
+              >
+                导入工作流 (.json)
+              </button>
+              <div className="wf-menu-sep" />
+              <div className="wf-menu-title">一键模板</div>
+              {TEMPLATE_LIST.map(([key, tpl]) => (
+                <button
+                  key={key}
+                  title={tpl.desc}
+                  onClick={() => {
+                    setWfMenuOpen(false)
+                    const res = applyTemplate(key, workspace as WorkspaceId)
+                    alert(res.ok ? `已套用模板「${tpl.label}」:${tpl.desc}` : (res.error ?? '套用失败'))
+                  }}
+                >
+                  {tpl.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {/*
           连线反馈三层:红色 = 方向错、被拒;黄色 = 语义可疑、已生效;都没 = 常规提示。
           方向错误当场可见;语义警告 6 秒后自动消失(它在 validateGraph 里有兜底)。

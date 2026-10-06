@@ -1196,6 +1196,63 @@ button.ghost.on {
   border-color: var(--accent-dim);
 }
 
+/* ---------- 工作流菜单(v0.6.0):导出 / 导入 / 模板 ---------- */
+
+.canvas-tools .wf-wrap {
+  position: relative;
+}
+
+.canvas-tools .wf-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  min-width: 230px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 45%);
+  overflow: hidden;
+  padding: 4px;
+}
+
+.canvas-tools .wf-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--fg-0);
+}
+
+.canvas-tools .wf-menu button:hover {
+  background: var(--bg-3);
+}
+
+.canvas-tools .wf-menu button:focus {
+  background: var(--bg-3);
+  box-shadow: inset 2px 0 0 var(--accent);
+  outline: none;
+}
+
+.wf-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 6px;
+}
+
+.wf-menu-title {
+  font-size: 11px;
+  color: var(--fg-2);
+  padding: 4px 10px 2px;
+}
+
 /*
  * 菜单项的类型图标。固定 16px 的槽位让九行的文字左边缘严格对齐 ——
  * 没有它的话"项目/串行/并行"行的文字会比"整合/输出"行左右错动几个像素。

@@ -73,7 +73,7 @@ import { resolveStartCwd, startSession } from '../src/main/startSession'
 import { agentListEntries } from '../src/main/agents/list'
 import { Packager } from '../src/main/packager'
 import { resolveBuilder } from '../src/main/packager/electronBuilder'
-import { addEntryList, applyTypeDefaults, connectionError, getNodeType, NODE_TYPES, workspaceNodeList, canvasIdFor } from '../src/shared/nodeRegistry'
+import { addEntryList, applyTypeDefaults, connectionError, getNodeType, NODE_TYPES, workspaceNodeList, canvasIdFor, WORKFLOW_TEMPLATES } from '../src/shared/nodeRegistry'
 import { ImageGen } from '../src/main/imagegen'
 import { Handoff } from '../src/main/handoff'
 import { pickByPath, runHttp } from '../src/main/imagegen/providers/http'
@@ -3654,9 +3654,16 @@ async function nodesV2ContractTests(): Promise<void> {
     })
     assert(msgs(issues).includes('不该有出边'), 'V7:output 有出边')
 
-    // V8:buildTarget 非 exe
+    // V8(v0.6.0 起):buildTarget 全部可用 —— apk/web 不再是灰置,而是差异化 info 提示
     issues = validateGraph({ nodes: [n('o', 'output', { buildTarget: 'apk' })], edges: [], projectDir: 'd' })
-    assert(msgs(issues).includes('暂不可用'), `V8:apk/web 灰置提示(实际 ${msgs(issues)})`)
+    assert(
+      msgs(issues).includes('Android') && !msgs(issues).includes('暂不可用'),
+      `V8:apk 目标给出 Android 提示且不再灰置(实际 ${msgs(issues)})`,
+    )
+    issues = validateGraph({ nodes: [n('o', 'output', { buildTarget: 'web' })], edges: [], projectDir: 'd' })
+    assert(msgs(issues).includes('Web 包'), `V8:web 目标给出 Web 打包提示(实际 ${msgs(issues)})`)
+    issues = validateGraph({ nodes: [n('o', 'output', { buildTarget: 'game' })], edges: [], projectDir: 'd' })
+    assert(!msgs(issues).includes('Android') && !msgs(issues).includes('Web 包'), 'V8:game 目标无多余提示')
 
     // ---------- V10..V12:本次新增的三个类型 ----------
     // V10:审查节点需要上游(没有上游 = 没东西可审)
@@ -3855,8 +3862,8 @@ async function nodesV2RunTests(): Promise<void> {
       specOf([nodeSpec('O', '', { kind: 'output', agentId: undefined, buildTarget: 'apk' })], []),
     )
     assert(
-      env.notices.some((x) => x.nodeId === 'O' && x.text.includes('暂不可用')),
-      'run() 里的图校验把 V8(apk 灰置)写进了节点日志',
+      env.notices.some((x) => x.nodeId === 'O' && x.text.includes('Android')),
+      'run() 里的图校验把 V8(apk 目标提示)写进了节点日志',
     )
   }
 
@@ -4339,9 +4346,12 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
     })
     assert(msgs(iss).includes('不该有出边'), `V7:output 有出边(实际 ${msgs(iss)})`)
 
-    // V8:buildTarget 非 exe
+    // V8(v0.6.0):buildTarget 全部可用,apk 给 info 提示而非灰置
     iss = validateGraph({ nodes: [n('o', 'output', { buildTarget: 'apk' })], edges: [], projectDir: 'd' })
-    assert(msgs(iss).includes('暂不可用'), `V8:apk 灰置提示(实际 ${msgs(iss)})`)
+    assert(
+      msgs(iss).includes('Android') && !msgs(iss).includes('暂不可用'),
+      `V8:apk 目标有 Android 提示且不再灰置(实际 ${msgs(iss)})`,
+    )
 
     // 回归:所有校验都不含 error 级(本增量 error 级留空,避免误阻断旧画布)
     assert(!iss.some((i) => i.level === 'error'), '校验结果里没有 error 级')
@@ -5183,6 +5193,45 @@ async function imageChainTests(): Promise<void> {
       assert(getNodeType('image_output').action === 'image-output', 'image_output 动作 = image-output(素材清单)')
     }
 
+    // ==================== ⑤c 内置模板工作流(v0.6.0):结构 / 归属 / 边下标 ====================
+    {
+      const names = Object.keys(WORKFLOW_TEMPLATES)
+      assert(names.length === 4, `内置模板恰好 4 个(实际 ${names.join(',')})`)
+      const expectKinds: Record<string, string[]> = {
+        'desktop-app': ['project', 'feature', 'review', 'test', 'output'],
+        'mobile-web': ['project', 'feature', 'output'],
+        'pixel-game': ['project', 'image', 'handoff', 'game', 'output'],
+        'image-flows': ['prompt', 'prompt_negative', 'sampler', 'image_output'],
+      }
+      for (const name of names) {
+        const t = WORKFLOW_TEMPLATES[name]
+        const kinds = t.nodes.map((n) => n.kind)
+        assert(
+          JSON.stringify(kinds) === JSON.stringify(expectKinds[name]),
+          `${name}:节点顺序/类型正确(${kinds.join(',')})`,
+        )
+        const okEdges = t.edges.every(([from, to]) => from >= 0 && to < t.nodes.length && from < to)
+        assert(okEdges, `${name}:边下标全部合法且指向后方(${JSON.stringify(t.edges)})`)
+      }
+      assert(WORKFLOW_TEMPLATES['image-flows'].workspace === 'image', '生图模板归属生图工作区')
+      assert(
+        WORKFLOW_TEMPLATES['desktop-app'].workspace === 'app' &&
+          WORKFLOW_TEMPLATES['mobile-web'].workspace === 'app' &&
+          WORKFLOW_TEMPLATES['pixel-game'].workspace === 'app',
+        '软件模板归属软件制作工作区',
+      )
+      assert(
+        WORKFLOW_TEMPLATES['desktop-app'].nodes[4].preset?.buildTarget === 'exe' &&
+          WORKFLOW_TEMPLATES['mobile-web'].nodes[2].preset?.buildTarget === 'web' &&
+          WORKFLOW_TEMPLATES['pixel-game'].nodes[4].preset?.buildTarget === 'game',
+        '模板输出节点带正确打包目标(exe/web/game)',
+      )
+      assert(
+        WORKFLOW_TEMPLATES['image-flows'].edges.length === 3,
+        '生图模板 3 条连线(正→采样,负→采样,采样→输出)',
+      )
+    }
+
     // ==================== ⑥ S1 攻击样例:注入串一进命令行就硬失败 ====================
     {
       const res = await runImg({
@@ -5501,7 +5550,7 @@ async function providerApiTests(): Promise<void> {
     assert(m1 === '********', `≤8 字符整把遮掉(实际 ${JSON.stringify(m1)})`)
     assert(!m1.includes('1') && !m1.includes('s'), '短 Key 遮罩里不含任何原文片段')
 
-    const long = 'sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    const long = 'sk-abcdefghijklmnopqrstuvwxyz-0123456789'
     const m2 = maskKey(long)
     assert(m2.startsWith('sk-a') && m2.endsWith('6789'), `长 Key 保留前 4 后 4(实际 ${m2})`)
     // 中间段一个字符都不许出现 —— 这才是"脱敏"的实质

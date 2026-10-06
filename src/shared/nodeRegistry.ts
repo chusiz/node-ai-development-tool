@@ -365,15 +365,16 @@ export const NODE_TYPES = {
           message: `输出节点「${ctx.data.title || ctx.id}」需要能触达项目节点(打包要知道项目文件夹在哪)`,
         })
       }
-      // V8:非 exe 灰置
+      // V9(v0.6.0):四目标全部可用,按目标给差异化提示
       const t = ctx.data.buildTarget ?? 'exe'
-      if (t !== 'exe') {
-        out.push({
-          level: 'warn',
-          nodeId: ctx.id,
-          message: `输出节点「${ctx.data.title || ctx.id}」的打包目标 ${t} 暂不可用(P0 仅支持 exe),运行时将按 exe 处理`,
-        })
+      const hints: Record<string, string> = {
+        exe: '',
+        web: `输出节点「${ctx.data.title || ctx.id}」打 Web 包:软件节点需产出带 index.html 的 Web 应用,打包器先跑构建脚本再把静态产物打成 zip`,
+        apk: `输出节点「${ctx.data.title || ctx.id}」打 Android 包:需要本机 Android SDK(无则自动降级为 Web 应用包 PWA)`,
+        game: '',
       }
+      const hint = hints[t] ?? ''
+      if (hint) out.push({ level: 'info', nodeId: ctx.id, message: hint })
       return out
     },
   },
@@ -1188,4 +1189,107 @@ export function connectionWarning(
     `「${srcTitle}」交给下游的是${PAYLOAD_LABEL[p]},「${tgtTitle}」要的却是别的 —— ` +
     '这条线语义可疑(已保留,不阻断;若是故意的可忽略)'
   )
+}
+
+// ---------------------------------------------------------------------------
+// 内置模板工作流(v0.6.0):一键铺图。
+// 参考 Langflow / Coze 的模板市场 —— 常用骨架做成"一键生成",新用户不用从零搭。
+// e2e 直接断言模板结构(节点数 / 连线数 / 工作区归属)。
+// ---------------------------------------------------------------------------
+
+export interface WorkflowTemplateNode {
+  kind: NodeKind
+  /** 留空 = 自动按注册表 defaultTitle 编号 */
+  title?: string
+  pos: { x: number; y: number }
+  preset?: Partial<NodeConfig>
+}
+
+export interface WorkflowTemplate {
+  label: string
+  desc: string
+  /** 模板归属工作区:套用时须在该页(防止生图模板铺到软件页) */
+  workspace: WorkspaceId
+  nodes: WorkflowTemplateNode[]
+  /** 边 = 节点下标对 [from, to] */
+  edges: [number, number][]
+}
+
+export const WORKFLOW_TEMPLATES: Record<string, WorkflowTemplate> = {
+  'desktop-app': {
+    label: '桌面应用(打包 exe)',
+    desc: '项目 → 生成 Electron 应用 → 审查 → 测试 → 输出 exe,一条完整桌面软件流水线',
+    workspace: 'app',
+    nodes: [
+      {
+        kind: 'project',
+        title: '项目 1(桌面应用)',
+        pos: { x: 40, y: 60 },
+        preset: { brief: '一个简洁的桌面待办事项应用 —— 生成可直接打包成 Windows exe 的 Electron 应用(package.json + main.js + index.html)' },
+      },
+      { kind: 'feature', title: '功能 1(生成应用代码)', pos: { x: 360, y: 60 } },
+      { kind: 'review', title: '审查 1', pos: { x: 680, y: 60 } },
+      { kind: 'test', title: '测试 1', pos: { x: 1000, y: 60 } },
+      { kind: 'output', title: '输出 1(exe)', pos: { x: 1320, y: 60 }, preset: { buildTarget: 'exe' } },
+    ],
+    edges: [
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 4],
+    ],
+  },
+  'mobile-web': {
+    label: '手机 / 网页应用',
+    desc: '项目 → 生成 Web 应用 → 输出 Web 站点(手机浏览器即用 / 可进一步打 APK)',
+    workspace: 'app',
+    nodes: [
+      {
+        kind: 'project',
+        title: '项目 1(网页应用)',
+        pos: { x: 40, y: 60 },
+        preset: { brief: '一个手机友好的网页应用 —— 单页 HTML(index.html + 内联样式与脚本),界面适配 375px 手机屏' },
+      },
+      { kind: 'feature', title: '功能 1(生成 Web 应用)', pos: { x: 360, y: 60 } },
+      { kind: 'output', title: '输出 1(Web)', pos: { x: 680, y: 60 }, preset: { buildTarget: 'web' } },
+    ],
+    edges: [
+      [0, 1],
+      [1, 2],
+    ],
+  },
+  'pixel-game': {
+    label: '像素小游戏',
+    desc: '项目 → 本地模型出像素素材 → 交接 → 游戏 → 输出 Godot 项目 zip',
+    workspace: 'app',
+    nodes: [
+      { kind: 'project', title: '项目 1(像素游戏)', pos: { x: 40, y: 60 }, preset: { brief: '一个像素风格的迷宫寻宝小游戏(Godot 4.x,GDScript)' } },
+      { kind: 'image', title: '图像 1(出像素素材)', pos: { x: 360, y: 60 } },
+      { kind: 'handoff', title: '交接 1(素材清单)', pos: { x: 680, y: 60 } },
+      { kind: 'game', title: '游戏 1', pos: { x: 1000, y: 60 } },
+      { kind: 'output', title: '输出 1(游戏 zip)', pos: { x: 1320, y: 60 }, preset: { buildTarget: 'game' } },
+    ],
+    edges: [
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 4],
+    ],
+  },
+  'image-flows': {
+    label: '生图工作流',
+    desc: '正向 / 负向提示词 → 采样出图 → 图片输出(本地模型直出)',
+    workspace: 'image',
+    nodes: [
+      { kind: 'prompt', title: '正向提示词 1', pos: { x: 40, y: 60 }, preset: { promptText: 'pixel art, warm light, high detail' } },
+      { kind: 'prompt_negative', title: '负向提示词 1', pos: { x: 40, y: 320 } },
+      { kind: 'sampler', title: '采样出图 1', pos: { x: 380, y: 180 } },
+      { kind: 'image_output', title: '图片输出 1', pos: { x: 720, y: 180 } },
+    ],
+    edges: [
+      [0, 2],
+      [1, 2],
+      [2, 3],
+    ],
+  },
 }

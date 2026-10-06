@@ -933,7 +933,7 @@ export interface NodeSpecSource {
 }
 
 export interface GraphIssue {
-  level: 'error' | 'warn'
+  level: 'error' | 'warn' | 'info'
   /** 问题挂在哪个节点上。图级问题(如"没有项目节点")没有 */
   nodeId?: string
   message: string

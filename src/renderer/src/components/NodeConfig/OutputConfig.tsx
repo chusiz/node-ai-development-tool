@@ -56,36 +56,44 @@ export function OutputConfig({ nodeId }: { nodeId: string }): JSX.Element | null
       <TitleField nodeId={nodeId} value={node.data.title} />
 
       <label className="cfglabel">
-        <span>打包方式</span>
+        <span>打包目标</span>
         <select
           value={target}
           onChange={(e) => patchConfig(nodeId, { buildTarget: e.target.value as BuildTarget })}
         >
           <option value="exe">Windows 应用 (.exe)</option>
-          {/* P1 链路:Android 需要完整工具链,Web 需要封装层 —— 先如实灰置 */}
-          <option value="apk" disabled title="即将支持(P1):需要 Android SDK / Gradle 工具链">
-            Android 应用 (.apk) — 即将支持
-          </option>
-          <option value="web" disabled title="即将支持(P1):静态站点打包">
-            Web 静态站点 — 即将支持
-          </option>
+          <option value="web">Web 静态站点 (.zip,手机/网页可用)</option>
+          <option value="apk">Android 应用 (.apk)</option>
           {/* v0.4.1:Godot 项目是文件夹即项目 → zip 交付 */}
           <option value="game">Godot 游戏项目 (.zip)</option>
         </select>
       </label>
       <div className="fhint">
-        <b>选 exe 时</b>:软件节点需产出 <b>Electron 应用</b>(项目里有{' '}
-        <code>package.json + main.js + index.html</code>),打包器自动用内置 electron-builder 打成
-        可执行 exe(便携单文件 / 安装包由项目 build.win.target 决定)。建议在软件节点 prompt 里写清:
-        "生成一个可直接打包成 Windows exe 的 Electron 应用,包含 package.json / main.js / index.html,
-        界面引用项目 assets 下的图片素材"。参考教程见《Electron 应用打包指南》。
+        <b>目标说明</b>
+        <ul style={{ margin: '4px 0 0', paddingLeft: 16 }}>
+          <li>
+            <b>exe</b>:软件节点需产出 <b>Electron 应用</b>(项目里有 <code>package.json + main.js +
+            index.html</code>),内置 electron-builder 打成可执行 exe。
+          </li>
+          <li>
+            <b>web</b>:软件节点产出带 <code>index.html</code> 的 Web 应用,打包器先跑构建脚本,再把静态产物
+            打成 zip —— 解压即可部署到任意静态托管 / 手机浏览器打开。
+          </li>
+          <li>
+            <b>apk</b>:本机有 Android SDK 时经 Capacitor + Gradle 真打 <code>.apk</code>;没有 SDK 时自动
+            降级为 Web 应用包(PWA),不空手失败。
+          </li>
+          <li>
+            <b>game</b>:游戏节点产出的 Godot 项目打成 zip,用 Godot 4.x 打开即可运行(可进一步导出 exe / apk)。
+          </li>
+        </ul>
       </div>
 
       <label className="cfglabel">
         <span>应用名</span>
         <input
           value={opts.appName ?? ''}
-          placeholder="留空 = 用项目 package.json 里的名称"
+          placeholder="留空 = 用项目里的名称"
           onChange={(e) => patchOptions({ appName: e.target.value })}
         />
       </label>
@@ -94,10 +102,21 @@ export function OutputConfig({ nodeId }: { nodeId: string }): JSX.Element | null
         <span>版本号</span>
         <input
           value={opts.version ?? ''}
-          placeholder="留空 = 用项目 package.json 里的版本"
+          placeholder="留空 = 用项目里的版本"
           onChange={(e) => patchOptions({ version: e.target.value })}
         />
       </label>
+
+      {target === 'apk' && (
+        <label className="cfglabel">
+          <span>Android 包名</span>
+          <input
+            value={opts.appId ?? ''}
+            placeholder="如 com.yourname.app(默认 com.chusiz.app)"
+            onChange={(e) => patchOptions({ appId: e.target.value })}
+          />
+        </label>
+      )}
 
       <div className="cfglabel col">
         <span>输出目录</span>

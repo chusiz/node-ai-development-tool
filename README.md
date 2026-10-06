@@ -19,7 +19,9 @@ Break complex AI development into a node graph. Each node is one AI action (proj
 | Local image generation | The image node loads a local checkpoint directly with diffusers (e.g. Anything V5) — **no SD WebUI service, no extra window, no server** |
 | Handoff node | Collects images produced by image nodes into a single asset manifest and hands them directly to downstream software nodes |
 | Video understanding | A video node extracts frames, analyzes them with a vision model, and turns "what's in the video" into text for downstream nodes |
-| Direct `.exe` packaging | The output node bundles electron-builder — the Electron app produced by software nodes becomes a single-file Windows executable (double-click to run, no Godot required) |
+| **Multi-platform packaging** | The output node ships **Windows `.exe`**, **Web static sites** (PWA-ready, phone browser friendly), **Android `.apk`** (via Capacitor + Gradle; auto-degrades to a Web app bundle when no SDK is detected), and **Godot game zips** — one workflow, four targets |
+| Workflow import / export | Save any canvas as a `.json` workflow and restore it later (ComfyUI-style); share workflows as files |
+| Built-in templates | One-click pipelines: desktop app (exe), mobile/web app, pixel game, and a full image-generation workflow |
 | Game creation | A game node makes AI produce a complete Godot project (delivered as a zip) |
 | Quality gates | Review (read-only audit) / test (run commands) / doc nodes for a closed quality loop |
 

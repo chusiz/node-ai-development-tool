@@ -22,7 +22,15 @@ import {
   type ProjectDirSource,
   type SubgraphTemplate,
 } from '../../../shared/canvas'
-import { applyTypeDefaults, connectionError, connectionWarning, getNodeType } from '../../../shared/nodeRegistry'
+import {
+  applyTypeDefaults,
+  connectionError,
+  connectionWarning,
+  getNodeType,
+  NODE_TYPES,
+  WORKFLOW_TEMPLATES,
+  type WorkspaceId,
+} from '../../../shared/nodeRegistry'
 import { HistoryStack } from '../../../shared/history'
 // graphIssuesFor = expandSubgraphs + validateGraph + 子图节点自身校验,与主进程同口径
 import { graphIssuesFor, type GraphIssue } from '../../../shared/workflow'
@@ -410,6 +418,123 @@ export const useGraphStore = create<GraphState>((set, get) => {
     setProjectDir(dir) {
       set({ projectDir: dir })
       scheduleSave()
+    },
+
+    /*
+     * 工作流导出 / 导入 / 模板(v0.6.0)。
+     *
+     * 参考 ComfyUI 的工作流 JSON 约定:图 = 可序列化的数据,分享/复用靠文件;
+     * 参考 Langflow / Coze 的模板市场:内置常用骨架,一键铺图。
+     * 导出的 JSON 是"画布快照" —— 节点位置、配置、连线全部保留。
+     */
+    exportWorkflow(): string {
+      const { nodes, edges, viewport } = get()
+      return JSON.stringify(
+        {
+          format: 'chusiz-workflow',
+          version: 1,
+          nodes: nodes.map((n) => ({
+            id: n.id,
+            type: n.type,
+            position: n.position,
+            data: n.data,
+          })),
+          edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
+          viewport,
+        },
+        null,
+        2,
+      )
+    },
+
+    importWorkflow(json: string): { ok: boolean; error?: string } {
+      let wf: {
+        format?: string
+        nodes?: Array<{ id?: string; type?: string; position?: { x: number; y: number }; data?: Record<string, unknown> }>
+        edges?: Array<{ id?: string; source?: string; target?: string }>
+      }
+      try {
+        wf = JSON.parse(json)
+      } catch {
+        return { ok: false, error: '文件不是有效的 JSON' }
+      }
+      if (wf.format !== 'chusiz-workflow' || !Array.isArray(wf.nodes)) {
+        return { ok: false, error: '不是 chusiz 工作流文件(缺 format: chusiz-workflow 头)' }
+      }
+      const before = snapshot()
+      const nodes = wf.nodes
+        .filter((n) => n && typeof n.id === 'string' && n.id)
+        .map((n) => {
+          const kind = NODE_TYPES[n.type ?? ''] ? (n.type as NodeKind) : 'feature'
+          const base = (n.data ?? {}) as Partial<NodeConfig>
+          return {
+            id: n.id as string,
+            type: kind,
+            position: n.position ?? { x: 80, y: 80 },
+            data: normalizeConfig(
+              { title: base.title ?? `${getNodeType(kind).defaultTitle} ${n.id}`, ...base },
+              kind,
+            ),
+            selected: false,
+          }
+        })
+      const idSet = new Set(nodes.map((n) => n.id))
+      const edges = (wf.edges ?? [])
+        .filter((e) => e && idSet.has(e.source ?? '') && idSet.has(e.target ?? ''))
+        .map((e) => ({ id: e.id ?? `e-${e.source}-${e.target}`, source: e.source as string, target: e.target as string }))
+      set({ nodes, edges, selectedNodeId: null })
+      commitHistory(before)
+      scheduleSave()
+      return { ok: true }
+    },
+
+    applyTemplate(name: string, workspace?: WorkspaceId): { ok: boolean; error?: string } {
+      const tpl = WORKFLOW_TEMPLATES[name]
+      if (!tpl) return { ok: false, error: `未知模板:${name}` }
+      const before = snapshot()
+      // 模板只允许出现在它能归属的工作区:生图模板只铺在生图页
+      if (tpl.workspace && workspace && tpl.workspace !== workspace) {
+        return {
+          ok: false,
+          error: `模板「${tpl.label}」属于${tpl.workspace === 'image' ? '生图' : '软件制作'}页,请先切换到对应工作区再套用`,
+        }
+      }
+      set({ nodes: [], edges: [], selectedNodeId: null })
+      const created: Record<number, string> = {}
+      for (const [i, spec] of tpl.nodes.entries()) {
+        const id = newCanvasNodeId()
+        created[i] = id
+        set((st) => ({
+          nodes: [
+            ...st.nodes,
+            {
+              id,
+              type: spec.kind,
+              position: spec.pos,
+              data: normalizeConfig(
+                {
+                  title: spec.title ?? `${getNodeType(spec.kind).defaultTitle} ${i + 1}`,
+                  ...spec.preset,
+                },
+                spec.kind,
+              ),
+              selected: false,
+            },
+          ],
+        }))
+      }
+      const edges = tpl.edges
+        .map(([from, to]) => {
+          const s = created[from]
+          const t = created[to]
+          if (!s || !t) return null
+          return { id: `e-${s}-${t}`, source: s, target: t }
+        })
+        .filter((e): e is { id: string; source: string; target: string } => !!e)
+      set({ edges })
+      commitHistory(before)
+      scheduleSave()
+      return { ok: true }
     },
 
     undo() {
