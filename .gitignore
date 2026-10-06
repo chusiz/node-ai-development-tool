@@ -1,0 +1,46 @@
+node_modules/
+out/
+dist/
+.tmp/
+
+# TS 增量构建缓存
+*.tsbuildinfo
+
+# electron-vite 把 electron.vite.config.ts 转译成 JS 时留下的临时文件
+# (带时间戳后缀,构建中断/并发时会在仓库根堆积,别误提交)
+electron.vite.config.*.mjs
+
+# 工具缓存
+.impeccable/
+
+# 本地工作区数据(agents 的日志/记忆),不进版本库
+.workbuddy/
+
+# 运行时数据 —— 本地环境相关,不进版本库
+data/
+workspaces/
+.cache/
+
+# 打包产物
+release/
+*.log
+
+# 本地生图运行时(提取的 SD 环境 / 模型 / 样例输出),体积巨大且含本地路径,不进版本库
+env/
+models/
+outputs/
+dungeon/
+
+# 个人验证/批量脚本(含本地环境路径,不适合公开)
+scripts/run-*.ts
+scripts/fullflow.ts
+scripts/secrets-debug.ts
+scripts/gen_dungeon.py
+scripts/gen-dungeon.ps1
+scripts/txt2img.py
+
+# 内部文档与本地演示产物(含本地路径引用与账号信息)
+docs/
+
+# 根目录调试输出
+/*.txt

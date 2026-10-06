@@ -1,0 +1,1621 @@
+/* ============================================================
+   节点画布 + Inspector
+
+   与 theme.css 分开是因为这一层是新架构引入的(React Flow 画布 + 右栏),
+   而 theme.css 里那些类是阶段 1 的产物。放在一起会让「哪些样式属于哪一代」
+   看不出来。变量仍然共用 theme.css 的 :root。
+   ============================================================ */
+
+/*
+ * 画布区是**上下两段**:stage 占满剩余高度,运行条在下面单独一行。
+ * 运行条做成布局里的一行(而不是盖在画布上的浮层),是为了让
+ * 「挡住节点」这件事在结构上不可能发生 —— 缩到多小都挡不住。
+ */
+.canvas-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0);
+}
+
+.canvas-stage {
+  flex: 1;
+  /* min-height:0 是必须的:没有它,flex 子项的最小高度是内容高度,
+     React Flow 的绝对定位容器会把这一行越撑越高,运行条被挤出视口 */
+  min-height: 0;
+  /* 「画布是空的」浮层相对它定位 */
+  position: relative;
+}
+
+.canvas-wrap.loading {
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-2);
+}
+
+.canvas-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--fg-2);
+  text-align: center;
+  /* 不挡画布操作,只有按钮可点 */
+  pointer-events: none;
+}
+
+.canvas-empty .big {
+  color: var(--accent);
+  opacity: 0.45;
+}
+
+.canvas-empty .sub {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.canvas-empty button {
+  pointer-events: auto;
+  margin-top: 6px;
+}
+
+.canvas-tools {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hint-inline {
+  font-size: 11px;
+  color: var(--fg-2);
+  background: color-mix(in srgb, var(--bg-1) 85%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+/* ---------- 画布上的节点 ---------- */
+
+.agent-node {
+  width: 232px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-2);
+  padding: 9px 11px 10px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 35%);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.agent-node.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-dim), 0 8px 22px rgb(0 0 0 / 45%);
+}
+
+.agent-node-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-node-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 就地改名的输入框:尺寸和标题一致,免得一进编辑态整行就跳一下 */
+.agent-node-rename {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg-0);
+  background: var(--bg-0);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0 4px;
+  line-height: 18px;
+  outline: none;
+}
+
+.node-status .badge {
+  font-size: 10.5px;
+  padding: 1px 7px;
+}
+
+.live-mini {
+  display: inline-flex;
+  align-items: center;
+  color: var(--warn);
+  padding: 0 3px;
+}
+
+.agent-node-meta {
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--fg-2);
+  font-family: var(--mono);
+}
+
+.agent-node-cwd {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* 路径太长时优先露末段(项目名)而不是盘符 */
+  direction: rtl;
+  text-align: left;
+}
+
+.agent-node-line {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--fg-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-node-line.empty {
+  color: var(--fg-2);
+  font-style: italic;
+}
+
+/* React Flow 默认的 handle 是个小方块,这里做成低调的圆点 */
+.agent-node .rf-handle {
+  width: 9px;
+  height: 9px;
+  background: var(--bg-3);
+  border: 1.5px solid var(--accent-dim);
+}
+
+.agent-node .rf-handle:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* ---------- React Flow 自身的暗色适配 ---------- */
+
+.react-flow__edge-path {
+  stroke: var(--border-strong);
+  stroke-width: 1.6;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--accent);
+}
+
+/*
+ * 连线中点的「剪断」按钮。
+ *
+ * ⚠️ 它被 portal 到 `.react-flow__edgelabel-renderer` 里,而 React Flow 给那一层设了
+ * 全局 `pointer-events: none`(不设的话,一整块透明覆盖层会吃掉画布上所有点击)。
+ * 所以按钮必须自己把 pointer-events 拿回来 —— 但**只在显示时**拿:
+ * 隐藏时保持 none,免得一个看不见的按钮蹲在线上偷走点击(那会变成"手滑切断了线")。
+ *
+ * 显隐由组件的 hover 状态给(.on),不是 CSS `:hover` —— 原因见 CuttableEdge 的注释。
+ */
+.edge-cut {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--fg-1);
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.edge-cut.on {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* 按下去这条线就没了,所以悬停时染成危险色 —— 它不该长得跟普通按钮一样 */
+.edge-cut:hover {
+  color: var(--err);
+  border-color: var(--err);
+}
+
+.react-flow__controls-button {
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  fill: var(--fg-1);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--bg-3);
+}
+
+/* ============================================================
+   Inspector(右栏)
+   ============================================================ */
+
+.inspector {
+  /*
+   * 跟着窗口走,而不是固定 420px。
+   * 固定宽度在 900px 的小窗口上会把画布压到 480px —— 两个节点就摆不下了。
+   * 上限 460 保证宽屏时消息不会拉成一行两百字,下限 340 保证表单还排得开。
+   */
+  width: clamp(340px, 34vw, 460px);
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-1);
+  border-left: 1px solid var(--border);
+}
+
+.inspector-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--fg-2);
+  text-align: center;
+  padding: 20px;
+}
+
+.inspector-empty .big {
+  color: var(--accent);
+  opacity: 0.5;
+}
+
+.inspector-empty .sub {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspector-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inspector-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 14px 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs button {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 7px 10px;
+  color: var(--fg-1);
+  font-size: 12.5px;
+}
+
+.tabs button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--fg-0);
+}
+
+.tabs button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.inspector-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* 「回到底部」浮层相对它定位 */
+  position: relative;
+}
+
+.inspector-body.scroll {
+  overflow-y: auto;
+  padding: 14px;
+}
+
+/* 右栏窄,原样的边距会把消息挤成一条 */
+.inspector .stream {
+  padding: 14px 16px;
+}
+
+.inspector .composer {
+  padding: 10px 14px 12px;
+}
+
+.inspector .composer .row,
+.inspector .composer .hint {
+  max-width: none;
+}
+
+.inspector .jump-bottom {
+  right: 16px;
+  bottom: 92px;
+}
+
+/* ---------- 节点配置 ---------- */
+
+.node-config {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.cfglabel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--fg-2);
+}
+
+.cfglabel > span {
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.cfglabel input,
+.cfglabel select,
+.cfglabel textarea {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--fg-0);
+  background: var(--bg-0);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 9px;
+  outline: none;
+}
+
+.cfglabel input:focus,
+.cfglabel select:focus,
+.cfglabel textarea:focus {
+  border-color: var(--accent);
+}
+
+.cfglabel textarea.tpl {
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  min-height: 62px;
+}
+
+.cfgrow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.cfgrow > .cfglabel {
+  flex: 1;
+}
+
+.cfgrow > .cfglabel.narrow {
+  flex: 0 0 88px;
+}
+
+.fhint.warn {
+  color: var(--warn);
+}
+
+.fhint.err {
+  color: var(--err);
+}
+
+/* ---------- 目录选择器 ---------- */
+
+.cwd-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cwd-value {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--fg-0);
+  background: var(--bg-0);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* 路径优先露末段 */
+  direction: rtl;
+  text-align: left;
+}
+
+.cwd-value.unset {
+  color: var(--fg-2);
+  font-style: italic;
+  direction: ltr;
+}
+
+button.mini {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 999px;
+}
+
+button.primary.mini {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: #eaf2ff;
+}
+
+/* ---------- 消息流里的补充件 ---------- */
+
+.trimmed-note {
+  max-width: 900px;
+  margin: 0 auto 12px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--fg-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+
+.bubble.notice {
+  background: var(--bg-2);
+  border-style: dashed;
+  color: var(--fg-1);
+  font-size: 12.5px;
+}
+
+.bubble.notice.warn {
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  color: var(--warn);
+}
+
+.bubble.notice.error {
+  border-color: color-mix(in srgb, var(--err) 45%, transparent);
+  color: var(--err);
+}
+
+.trunc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  flex-wrap: wrap;
+}
+
+pre.code.full {
+  width: 100%;
+  max-height: 420px;
+}
+
+/* ---------- 顶栏的「项目文件夹」 ---------- */
+
+/*
+ * 它是开始干活的前置条件,所以未设置时用橙色虚线把它从一排灰徽标里拎出来。
+ * max-width 防止长路径把顶栏挤折行 —— 路径本身挂在 title 上。
+ */
+.project-dir {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-dir.error {
+  color: var(--err);
+  border-color: color-mix(in srgb, var(--err) 55%, transparent);
+  background: color-mix(in srgb, var(--err) 12%, transparent);
+  border-style: solid;
+  max-width: 360px;
+}
+
+/*
+ * 没指定项目文件夹 —— 不再是警告色。
+ *
+ * 这里原来用 --warn + 虚线边框,因为当时"选目录"是开始对话的前置条件。
+ * 现在不是了:不选就落在画布沙箱里,对话照常。所以它只是一个"当前在沙箱,
+ * 想换成真项目就点我"的安静提示,长成警告的样子只会让人以为哪儿坏了。
+ */
+.project-dir.unset {
+  color: var(--fg-2);
+}
+
+.project-dir.unset:hover:not(:disabled) {
+  color: var(--fg-0);
+}
+
+/* ============================================================
+   工作流(连线跑起来之后的运行态)
+   ============================================================ */
+
+/*
+ * 运行条:画布**下方**的一条实心栏,不是浮层。
+ *
+ * 之前它绝对定位在画布上沿,把节点标题挡住了 —— 所以挪到布局流里,
+ * 从此不占用画布的任何像素。上边框代替阴影来分隔两段。
+ */
+.run-bar {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--bg-1);
+  border-top: 1px solid var(--border-strong);
+}
+
+.run-bar .run-tally {
+  font-size: 11.5px;
+  color: var(--fg-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.run-bar .run-tally .err {
+  color: var(--err);
+}
+
+/* 环检测之类的发起失败:换行展开成一块 */
+.run-bar .run-error {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  padding: 4px 0 0;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+/*
+ * 输入框**浮在运行条上方**,不占布局。
+ * 展开它就把画布挤矮一截的话,React Flow 会跟着重算尺寸,
+ * 用户正看着的节点会跳一下 —— 一个纯提示性的输入框不该有这种副作用。
+ */
+.run-bar .run-input {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  padding: 10px 12px;
+  background: var(--bg-1);
+  border-top: 1px solid var(--border-strong);
+  box-shadow: 0 -8px 20px rgb(0 0 0 / 35%);
+}
+
+.run-bar .run-input textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 54px;
+  background: var(--bg-0);
+  color: var(--fg-0);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.run-bar .run-input .hint {
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--fg-2);
+}
+
+button.ghost {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--fg-2);
+}
+
+button.ghost.on {
+  color: var(--fg-0);
+  border-color: var(--accent-dim);
+}
+
+/* ---------- 节点上的运行态 ---------- */
+
+.run-chip {
+  font-size: 10.5px;
+  padding: 1px 7px;
+}
+
+.agent-node-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-node-cwd {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 选目录失败时就地显示 —— 红色,因为这是个"本该成功却没成功"的状态 */
+.agent-node-cwd.err {
+  color: var(--err);
+  white-space: normal;
+  line-height: 14px;
+}
+
+/*
+ * 「没指定项目文件夹」时显示的**当前落点**:沙箱目录,点一下能换成真项目。
+ *
+ * 故意用中性色,不用 --warn。之前是橙色虚线框,读起来像"出错了/有一步没做",
+ * 而实际上什么都没缺 —— agent 就落在画布沙箱里,对话照常。
+ * 一个只是可选的动作,不该长成一条警告。
+ */
+.node-need-cwd {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 7px;
+  font-size: 10.5px;
+  line-height: 17px;
+  text-align: left;
+  color: var(--fg-2);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * 选择器要带上 .agent-node 这个祖先。
+ * theme.css 里的 `button:hover:not(:disabled)` 特异性是 (0,2,1),
+ * 光写 `.node-need-cwd:hover` 只有 (0,2,0) —— 会被兜底规则盖掉,
+ * 悬停时这个按钮会变成普通灰底,看着像"它坏了/点不动"。
+ */
+.agent-node .node-need-cwd:hover {
+  color: var(--fg-0);
+  background: var(--bg-3);
+  border-color: var(--border-strong);
+}
+
+.node-run {
+  flex: none;
+  /* 比 mini 还小一号:它是节点上的次级操作,不该抢标题的注意力 */
+  padding: 0 6px;
+  line-height: 16px;
+  font-size: 10px;
+}
+
+/*
+ * 节点上的 ×。
+ *
+ * 平时压低存在感、悬停才变红:它紧挨着「▶ 跑这个节点」,而删节点没有撤销 ——
+ * 一个和运行按钮同等显眼的删除键,早晚会有人点错。
+ */
+.node-del {
+  flex: none;
+  padding: 0 5px;
+  line-height: 16px;
+  font-size: 12px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--fg-2);
+  opacity: 0.55;
+}
+
+.node-del:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--err);
+  border-color: color-mix(in srgb, var(--err) 55%, transparent);
+  background: color-mix(in srgb, var(--err) 14%, transparent);
+}
+
+/* 上游是谁 —— 连线的意义在界面上的唯一线索 */
+.agent-node-up {
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 环检测失败时高亮那条闭合路径 */
+.react-flow__edge.edge-cycle .react-flow__edge-path {
+  stroke: var(--err);
+  stroke-width: 2.4;
+  stroke-dasharray: 6 4;
+  animation: cycle-dash 0.7s linear infinite;
+}
+
+@keyframes cycle-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+/* 模板变量按钮区 */
+.tpl-vars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.tpl-vars .hint {
+  font-size: 10.5px;
+  color: var(--fg-2);
+}
+
+.tpl-vars button.mini {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   nodes-v2:类型化节点
+   ============================================================ */
+
+/*
+ * 类型角标:项目蓝 / 串行蓝 / 并行橙 / 整合紫 / 输出绿 / 图像洋紫 /
+ * 审查青 / 测试橄榄 / 文档玫红 —— 一眼可辨,两两不撞色。
+ *
+ * 用 inline-flex 而不是默认行内盒:角标里是"图标 + 文字"两个子元素,
+ * 弹性行让它们垂直居中对齐(gap 管间距),图标跟着角标自己的 color 上色
+ * (SVG 是 stroke="currentColor"),所以九种颜色只需要在下面各写一处。
+ */
+.node-kind-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  color: var(--fg-1);
+}
+
+/* 角标里的图标比文字略小一点,视觉重量才和 10px 的中文相当 */
+.node-kind-badge .icon {
+  opacity: 0.9;
+}
+
+.node-kind-badge.kind-project {
+  border-color: #3a6ea5;
+  color: #8ec2ff;
+}
+
+.node-kind-badge.kind-serial {
+  border-color: #2f4a75;
+  color: #9db8dd;
+}
+
+.node-kind-badge.kind-parallel {
+  border-color: #a56a2a;
+  color: #ffc98e;
+}
+
+.node-kind-badge.kind-merge {
+  border-color: #6a4aa5;
+  color: #cdbaff;
+}
+
+.node-kind-badge.kind-output {
+  border-color: #2f855a;
+  color: #9ae6b4;
+}
+
+/* 图像紫:比整合紫更亮的洋紫,和整合一眼能分开 */
+.node-kind-badge.kind-image {
+  border-color: #7a4aa5;
+  color: #e0c3ff;
+}
+
+/* 审查青:冷色 = "在看、没动手",和所有会改代码的类型拉开 */
+.node-kind-badge.kind-review {
+  border-color: #2f7f8f;
+  color: #8fd9e6;
+}
+
+/* 测试橄榄:它是"校验"不是"产出",用偏黄绿的中性色 */
+.node-kind-badge.kind-test {
+  border-color: #7f8f2f;
+  color: #d3e58c;
+}
+
+/* 文档玫红:暖色但避开并行的橙,和整合的紫也分得开 */
+.node-kind-badge.kind-doc {
+  border-color: #a53f5f;
+  color: #ffb3c8;
+}
+
+/* 子图蓝灰:它是"容器"不是"动作",颜色压低一档、不与任何执行类节点抢眼 */
+.node-kind-badge.kind-subgraph {
+  border-color: #5c7ab8;
+  color: #b8ccec;
+}
+
+/* 生图工作区(v0.5.0):提示词薄荷(纯文本数据源,不执行)/ 采样琥珀(出图引擎)/ 图片输出沿用 output 绿 */
+.node-kind-badge.kind-prompt {
+  border-color: #2f8f7a;
+  color: #8ce0cd;
+}
+.node-kind-badge.kind-sampler {
+  border-color: #b8872f;
+  color: #ffd98a;
+}
+.agent-node.kind-prompt { border-left: 3px solid #2f8f7a; }
+.agent-node.kind-sampler { border-left: 3px solid #b8872f; }
+
+/* 游戏翠绿:与 output 的绿区分(暖一点),一眼看出"这是产出一个可玩的东西" */
+.node-kind-badge.kind-game {
+  border-color: #3fa56b;
+  color: #a8f0c8;
+}
+
+/* 视频青:与 review 的青色区分(偏亮偏蓝),与图像紫也不撞 */
+.node-kind-badge.kind-video {
+  border-color: #2f9fa5;
+  color: #a8e8ec;
+}
+
+/* 交接琥珀:传递/桥的暖色,与图像紫、软件绿都区分 */
+.node-kind-badge.kind-handoff {
+  border-color: #c98a2f;
+  color: #f0d2a8;
+}
+
+/* 各类型节点的左边条:图一多,光靠角标不够扫一眼分类 */
+.agent-node.kind-project { border-left: 3px solid #3a6ea5; }
+.agent-node.kind-serial { border-left: 3px solid #2f4a75; }
+.agent-node.kind-parallel { border-left: 3px solid #a56a2a; }
+.agent-node.kind-merge { border-left: 3px solid #6a4aa5; }
+.agent-node.kind-output { border-left: 3px solid #2f855a; }
+.agent-node.kind-image { border-left: 3px solid #7a4aa5; }
+.agent-node.kind-review { border-left: 3px solid #2f7f8f; }
+.agent-node.kind-test { border-left: 3px solid #7f8f2f; }
+.agent-node.kind-doc { border-left: 3px solid #a53f5f; }
+.agent-node.kind-game { border-left: 3px solid #3fa56b; }
+.agent-node.kind-video { border-left: 3px solid #2f9fa5; }
+.agent-node.kind-handoff { border-left: 3px solid #c98a2f; }
+.agent-node.kind-subgraph { border-left: 3px solid #5c7ab8; }
+
+/* ---------- 子图:配置面板里的内部节点清单 ---------- */
+.subgraph-list {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subgraph-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.subgraph-node-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 数据探针(悬停边/节点,浮出该节点的产出预览)---------- */
+/* fixed + 高 z-index:它挂在指针旁边,不属于画布坐标系;pointer-events 关掉,
+   免得浮层本身把节点的 mouseleave 触发掉、探针一闪一闪 */
+.probe-pop {
+  position: fixed;
+  z-index: 60;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  background: var(--bg-1, #161b26);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 45%);
+  padding: 8px 10px;
+  pointer-events: none;
+}
+
+.probe-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.probe-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.probe-status {
+  margin-left: auto;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.probe-status.st-done { color: #9ae6b4; }
+.probe-status.st-failed { color: #ff9b9b; }
+.probe-status.st-running { color: #e2a95c; }
+.probe-status.st-cancelled,
+.probe-status.st-skipped { color: var(--fg-2); }
+
+.probe-body {
+  margin: 0;
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  max-height: 140px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--fg-1, inherit);
+}
+
+.probe-foot {
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: var(--fg-2);
+}
+
+/* ---------- 图像节点:缩略图网格(≤6 张 +N / 空态 / 生成中) ---------- */
+.image-thumbs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.image-thumb {
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-0);
+}
+
+.image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 占位:正在按需取这张图 */
+.image-thumb.pending {
+  background: linear-gradient(90deg, var(--bg-1), var(--bg-2), var(--bg-1));
+  opacity: 0.6;
+}
+
+.image-thumb.more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--fg-2);
+}
+
+/* 空态(未运行"还没有图片" / 运行中"生成中…") */
+.image-thumbs.empty {
+  display: block;
+  color: var(--fg-2);
+  font-style: italic;
+  font-size: 11.5px;
+  padding: 6px 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* provider 单选行(本地命令 / HTTP) */
+.image-config-provider {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* 节点上的第二行元信息(brief / 汇入数 / 输出目录):比路径行再弱一档 */
+.agent-node-brief {
+  display: block;
+  font-family: var(--ui, inherit);
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 软提示(并行冲突 / 汇入不足):橙色但不阻断 —— 提示归提示,不吓唬人 */
+.node-soft-hint {
+  display: block;
+  font-size: 10px;
+  color: #e2a95c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 输出节点的「开始打包」:占满 meta 行,和 agent 的 ▶ 并存(它是带文字的显眼版) */
+.agent-node .node-pack {
+  flex: 1;
+  border-color: var(--border-strong);
+  color: var(--fg-0);
+}
+
+/*
+ * 测试节点的「开始测试」。
+ *
+ * 和「开始打包」同样是**就地触发一次内置动作**的显眼按钮,但不用 flex:1 占满
+ * 整行 —— 测试节点的 meta 行上还有命令原文与超时两个信息要放,
+ * 按钮把整行吃掉的话那两项就没地方了。
+ */
+.agent-node .node-run-test {
+  flex: none;
+  border-color: var(--border-strong);
+  color: var(--fg-0);
+  padding: 3px 9px;
+}
+
+/* 测试节点的命令没填时,那一格要说"未配置"而不是留一片空白 */
+.agent-node-brief.unset {
+  color: #e2a95c;
+  font-style: italic;
+}
+
+/* RunBar 的「输入」按钮上那个"有未提交输入"的小圆点 */
+.run-bar .dirty-dot {
+  color: var(--accent);
+  margin-left: 1px;
+}
+
+/* ---------- 添加节点类型菜单 ---------- */
+
+.canvas-tools .add-wrap {
+  position: relative;
+}
+
+.canvas-tools .add-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 45%);
+  overflow: hidden;
+}
+
+.canvas-tools .add-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  padding: 7px 12px 7px 9px;
+}
+
+.canvas-tools .add-menu button:hover {
+  background: var(--bg-3);
+}
+
+/*
+ * 菜单项被聚焦(键盘 ↑↓ 移动 / 打开时落在第一项)时的高亮。
+ *
+ * 特意用 :focus 而不是 :focus-visible —— 这里的焦点是**程序化**给的,
+ * 浏览器对这种情况是否算"可见焦点"判断不一,用 :focus 才能保证
+ * 用户一定看得见"回车会选中哪一项"。
+ */
+.canvas-tools .add-menu button:focus {
+  background: var(--bg-3);
+  box-shadow: inset 2px 0 0 var(--accent);
+  outline: none;
+}
+
+/* 序号徽标:既是提示,也是数字键直选的依据 */
+.add-idx {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--fg-2);
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.canvas-tools .add-menu button:focus .add-idx {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+/*
+ * 菜单项的类型图标。固定 16px 的槽位让九行的文字左边缘严格对齐 ——
+ * 没有它的话"项目/串行/并行"行的文字会比"整合/输出"行左右错动几个像素。
+ * 颜色与画布上角标的完全同源(同一套色值),菜单里认得的颜色在画布上还认得。
+ */
+.add-icon {
+  flex: 0 0 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-1);
+}
+
+.add-icon.ic-project { color: #8ec2ff; }
+.add-icon.ic-serial { color: #9db8dd; }
+.add-icon.ic-parallel { color: #ffc98e; }
+.add-icon.ic-merge { color: #cdbaff; }
+.add-icon.ic-output { color: #9ae6b4; }
+.add-icon.ic-image { color: #e0c3ff; }
+.add-icon.ic-review { color: #8fd9e6; }
+.add-icon.ic-test { color: #d3e58c; }
+.add-icon.ic-doc { color: #ffb3c8; }
+
+.add-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* 菜单底部的按键说明 */
+.add-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 10.5px;
+  color: var(--fg-2);
+  background: var(--bg-1);
+}
+
+/* ---------- RunBar 右侧常驻的键盘提示 ---------- */
+
+.run-bar .run-keys {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--fg-2);
+  white-space: nowrap;
+}
+
+.run-bar .run-keys-label {
+  margin: 0 6px 0 3px;
+}
+
+/* ---------- 快捷键帮助浮层 ---------- */
+
+/*
+ * 居中弹窗而不是右侧抽屉。
+ * 设置/技能是"要动手干活"的地方(所以抽屉式,不挡画布);
+ * 快捷键表是"看一眼就关"的参考信息,居中最省眼睛。
+ * 遮罩加一层轻模糊:底下的画布还在,但不再和表格的字抢注意力。
+ */
+.sc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 55%);
+  backdrop-filter: blur(2px);
+}
+
+.sc-modal {
+  width: min(720px, 95vw);
+  max-height: min(84vh, 800px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 55%);
+  overflow: hidden;
+}
+
+.sc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+}
+
+.sc-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sc-head h2 .icon {
+  color: var(--accent);
+}
+
+.sc-sub {
+  font-size: 11.5px;
+  color: var(--fg-2);
+}
+
+/* 关闭:一个图标就够,不跟标题抢位置 */
+.sc-close {
+  flex: none;
+  padding: 4px 6px;
+  color: var(--fg-2);
+  background: transparent;
+  border-color: transparent;
+}
+
+.sc-close:hover:not(:disabled) {
+  color: var(--fg-0);
+  background: var(--bg-3);
+  border-color: var(--border-strong);
+}
+
+/* ---------- 搜索条 ---------- */
+
+.sc-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 16px 0;
+  padding: 0 10px;
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.12s ease;
+}
+
+.sc-search:focus-within {
+  border-color: var(--accent-dim);
+}
+
+.sc-search > .icon {
+  color: var(--fg-2);
+}
+
+.sc-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 0;
+  background: transparent;
+  border: none;
+  color: var(--fg-0);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+/* 焦点环交给外层 .sc-search 的 :focus-within,输入框自己不再多画一圈 */
+.sc-search input:focus-visible {
+  outline: none;
+}
+
+.sc-clear {
+  flex: none;
+  padding: 2px 4px;
+  color: var(--fg-2);
+  background: transparent;
+  border-color: transparent;
+}
+
+.sc-clear:hover:not(:disabled) {
+  color: var(--fg-0);
+  background: var(--bg-3);
+}
+
+.sc-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 16px 16px;
+}
+
+.sc-none {
+  padding: 26px 4px;
+  text-align: center;
+  color: var(--fg-2);
+  font-size: 12.5px;
+}
+
+/* ---------- 分组 ---------- */
+
+.sc-group {
+  margin-top: 16px;
+}
+
+/*
+ * 分组标题:图标 + 名称 + 条数。
+ * 条数收在右端的胶囊里(而不是写成"(3)")—— 一列数字右对齐在一起时,
+ * 胶囊比括号好扫,顺带给标题一条视觉上的终点。
+ */
+.sc-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.9px;
+  color: var(--fg-1);
+}
+
+.sc-group h3 .icon {
+  color: var(--accent);
+  opacity: 0.8;
+}
+
+.sc-count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 15px;
+  letter-spacing: 0;
+}
+
+/*
+ * 单列到底(不是两列密排)。
+ *
+ * 两列的好处是一屏看得完,代价是"按键"和"说明"的对应关系要靠眼睛横着追,
+ * 相邻两列还会互相干扰。单列 + 分组标题之后,扫读是纵向的 —— 一行是一条,
+ * 内容多也没关系,浮层自己有滚动。
+ */
+.sc-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 行:按键列定宽 → 所有"说明"的左边缘严格对齐,扫读时不必重新找起点 */
+.sc-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  /* 负外边距 + 等量内边距:hover 的高亮块比文字宽出一点,像一整行而不是一个文本框 */
+  margin: 0 -8px;
+  padding: 6px 8px;
+  min-width: 0;
+  border-radius: var(--radius-sm);
+  transition: background 0.1s ease;
+}
+
+.sc-item:hover {
+  background: var(--bg-2);
+}
+
+.sc-keys {
+  flex: 0 0 118px;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.sc-key {
+  display: inline-flex;
+  align-items: center;
+}
+
+/*
+ * 鼠标手势那一列的"按键":它不是键帽(没有对应的键可以按),
+ * 所以是「图标 + 文字」而不是 kbd —— 做成键帽的样子会让人以为真能按。
+ */
+.sc-gesture {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--fg-1);
+}
+
+.sc-gesture .icon {
+  color: var(--fg-2);
+}
+
+.sc-text {
+  min-width: 0;
+}
+
+.sc-label {
+  font-size: 12.5px;
+  color: var(--fg-0);
+}
+
+.sc-hint {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+
+.sc-foot {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-2);
+  font-size: 11.5px;
+  color: var(--fg-2);
+}
+
+/* ---------- RunBar 校验提示 ---------- */
+
+.run-bar .run-warns-toggle {
+  color: #e2a95c;
+}
+
+.run-bar .run-warns {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 520px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--bg-1) 85%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 11.5px;
+}
+
+.run-bar .run-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: var(--fg-1);
+}
+
+/* 图标的行高比文字小,不往上提一点会显得"贴着头顶" */
+.run-bar .run-warn .icon {
+  margin-top: 3px;
+  opacity: 0.85;
+}
+
+.run-bar .run-warn.err {
+  color: var(--err, #e5726f);
+}
+
+/* ---------- RunBar 失败原因 ---------- */
+
+/*
+ * 与 run-warns 同一套壳子,但语义更重:左边框压一道红,
+ * 让它在视觉上就与"运行前的建议"区分开 —— 前者可以无视,后者不处理就白跑。
+ */
+.run-bar .run-fails-toggle {
+  color: var(--err, #e5726f);
+}
+
+.run-bar .run-fails {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 560px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--bg-1) 85%, transparent);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--err, #e5726f);
+  border-radius: var(--radius);
+  font-size: 11.5px;
+}
+
+.run-bar .run-fail {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: var(--err, #e5726f);
+}
+
+.run-bar .run-fail .icon {
+  margin-top: 3px;
+  opacity: 0.85;
+}
+
+/* 节点名定宽一段:原因长短不一时,原因仍然从同一列起排,不会左右乱跳 */
+.run-bar .run-fail-title {
+  flex: 0 0 auto;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-1);
+}
+
+.run-bar .run-fail-reason {
+  min-width: 0;
+  color: var(--fg-1);
+}
+
+/* ---------- ProjectDirButton(readonly 诊断项) ---------- */
+
+.project-dir.readonly {
+  cursor: default;
+  opacity: 0.9;
+}
+
+.project-dir.readonly.deprecated {
+  /* deprecated 兜底:比权威来源弱一档,提示"它不是该配置的地方" */
+  border-style: dashed;
+  color: var(--fg-2);
+}
+
+/* 工具条上的错误提示(非法连线被拒) */
+.hint-inline.err {
+  color: var(--err, #e5726f);
+  border-color: var(--err, #e5726f);
+}

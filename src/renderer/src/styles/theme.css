@@ -1,0 +1,1773 @@
+/*
+ * 主题 = CSS 自定义属性。
+ *
+ * 刻意不用 Tailwind:主题需求("自定义主题/字体/透明度/背景")本质就是
+ * CSS 变量的教科书场景。换主题 = 运行时 setProperty,零依赖、零构建风险,
+ * 用户还能手改这个文件。阶段 5 的主题编辑器直接映射到这些变量。
+ */
+:root {
+  --bg-0: #0d1017;
+  --bg-1: #141922;
+  --bg-2: #1b212c;
+  --bg-3: #232b38;
+  --border: #2b3546;
+  --border-strong: #3a4759;
+
+  --fg-0: #e6ebf2;
+  --fg-1: #a8b3c4;
+  --fg-2: #6b7789;
+
+  --accent: #6ea8fe;
+  --accent-dim: #2f4a75;
+  --ok: #5fd39b;
+  --warn: #e6b95c;
+  --err: #f0736a;
+  --think: #b58cf0;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  --sans: "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--fg-0);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+/* ---------- 布局 ---------- */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  /* 窗口拉窄时允许折成两行,而不是把徽标挤变形。
+     row-gap 比 gap 小一点,折行后不至于太散 */
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+  -webkit-app-region: drag;
+}
+
+.topbar button,
+.topbar input {
+  -webkit-app-region: no-drag;
+}
+
+/* ---------- 项目选择器 + 工作区切换(v0.5.0 双页面 / 多项目) ---------- */
+.project-select {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--fg-0);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 12px;
+  max-width: 160px;
+  -webkit-app-region: no-drag;
+}
+.project-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ws-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  -webkit-app-region: no-drag;
+}
+.ws-tab {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  color: var(--fg-2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.ws-tab:hover {
+  color: var(--fg-0);
+  background: var(--bg-3);
+}
+.ws-tab.on {
+  color: #fff;
+  background: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- 无边框窗口控制(最小化/最大化/关闭) ----------
+ * 固定贴顶栏右缘、不参与折行。hover 底色与关闭红色是这类按钮的通用约定,
+ * 用户靠肌肉记忆就能找到「关闭」。 */
+.win-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: -8px; /* 抵消 .topbar 的 16px 右 padding,贴到窗口右缘 */
+  -webkit-app-region: no-drag;
+}
+
+.win-ctl button {
+  width: 34px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--fg-1);
+}
+
+.win-ctl button:hover {
+  background: var(--bg-3);
+  color: var(--fg-0);
+}
+
+.win-ctl .win-ctl-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.brand {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar {
+  width: 320px;
+  flex: 0 0 auto;
+  background: var(--bg-1);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* 「回到底部」浮层相对它定位 */
+  position: relative;
+}
+
+/* ---------- 通用小件 ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--fg-1);
+  font-size: 11.5px;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+.badge.ok {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+.badge.err {
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 14%, transparent);
+}
+.badge.warn {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.dot.pulse {
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.75);
+  }
+}
+
+button {
+  font: inherit;
+  color: var(--fg-0);
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--border);
+  border-color: var(--accent-dim);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: #eaf2ff;
+}
+
+button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 45%, var(--bg-3));
+}
+
+button.danger {
+  border-color: color-mix(in srgb, var(--err) 55%, transparent);
+  color: var(--err);
+}
+
+/* ---------- 图标 ---------- */
+
+/*
+ * 所有内联 SVG 图标的公共部分。
+ *
+ * `display: inline-block` + `vertical-align: -0.15em` 是给**行内**用法(提示文字里
+ * 夹一个警示图标)对齐用的:图标默认会坐在基线上,而中文的视觉中心比基线高,
+ * 不挪一下看起来就像"沉下去了一截"。0.15em 是按 12–14px 图标在 12px 中文里的
+ * 实测偏移,不随字号放大而失准(是相对单位)。
+ *
+ * `flex: 0 0 auto` 给**弹性**用法(按钮里)用:图标永远不参与拉伸,
+ * 文字再长也压不扁它。
+ */
+.icon {
+  display: inline-block;
+  vertical-align: -0.15em;
+  flex: 0 0 auto;
+}
+
+/*
+ * 按钮里带图标时,把图标和文字按弹性行排开。
+ *
+ * 用 `:has()` 精确命中"**直接子元素**里有图标"的按钮,而不是改全局的
+ * `button { display: … }` —— 那是几十个按钮共用的基础规则,把它从行内盒
+ * 换成弹性盒会影响每一个按钮的换行与对齐(比如多行文字按钮会变成两个
+ * 匿名弹性项)。这里只动真正带图标的那几个。
+ */
+button:has(> .icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 提示块里的图标:文字紧跟着它,需要一个字距的空隙 */
+.fhint > .icon,
+.hint-inline > .icon,
+.sc-sub > .icon {
+  margin-right: 4px;
+}
+
+/*
+ * 空态中央的品牌标记(画布空 / 没选节点 / 没有对话):用强调色而不是继承文字色,
+ * 它是个"路标"不是文字。
+ */
+.big > .icon {
+  color: var(--accent);
+}
+
+/* ---------- 键盘:焦点环 + 键帽 ---------- */
+
+/*
+ * 焦点环只给 :focus-visible。
+ *
+ * 用 :focus 的话,鼠标点任何一个按钮都会留下一圈蓝边,看起来像"卡住了";
+ * 而键盘 Tab 过去时又必须有可见的落点 —— :focus-visible 正好只覆盖后者。
+ * 这是「键盘能看见」与「鼠标不碍眼」之间唯一不需要折中的写法。
+ */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* React Flow 的画布空白区是可聚焦的,但它不需要焦点环 */
+.react-flow__pane:focus-visible {
+  outline: none;
+}
+
+/* 键帽。帮助浮层、工具条、输入框提示共用一个形状 */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--fg-1);
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  /* 下边加厚一像素,读起来像"一颗立着的键"而不是一个方框 */
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* 组合键里的"主键"(Ctrl+K 的 K)比修饰键亮一档 */
+.kbd.main {
+  color: var(--fg-0);
+  border-color: var(--accent-dim);
+}
+
+/* 键帽之间的 + */
+.sc-sep {
+  color: var(--fg-2);
+  font-size: 10px;
+  margin: 0 2px;
+}
+
+.keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.muted {
+  color: var(--fg-2);
+}
+
+/* 伪装成链接的按钮(工具条上的「? 快捷键」)。它不该长得像一颗按钮 */
+button.linklike {
+  background: transparent;
+  border-color: transparent;
+  padding: 0 3px;
+  color: var(--accent);
+  font-size: inherit;
+  line-height: inherit;
+  text-decoration: underline dotted color-mix(in srgb, var(--accent) 65%, transparent);
+  text-underline-offset: 2px;
+}
+
+/* 必须带上 :hover:not(:disabled) —— theme.css 的通用悬停规则特异性更高 */
+button.linklike:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--fg-0);
+}
+
+/*
+ * 系统开了"减少动态效果"就关掉所有动画。
+ * 只动 duration 不动逻辑:脉冲点会变成常亮的点,信息不丢,只是不再晃。
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- 侧栏信息块 ---------- */
+.section {
+  margin-bottom: 18px;
+}
+
+.section > h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.kv {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12.5px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.kv > .k {
+  color: var(--fg-2);
+  flex: 0 0 88px;
+}
+
+.kv > .v {
+  font-family: var(--mono);
+  color: var(--fg-1);
+  word-break: break-all;
+  min-width: 0;
+}
+
+.pathbox {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--fg-1);
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.errbox {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--err) 35%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.note {
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--fg-2);
+}
+
+.note.warn {
+  color: var(--warn);
+}
+
+.note code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-1);
+  background: var(--bg-0);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.cwdbuf {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--fg-1);
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  resize: vertical;
+  min-height: 52px;
+  outline: none;
+  line-height: 1.5;
+}
+
+.cwdbuf:focus {
+  border-color: var(--accent);
+}
+
+.cwdbuf:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ---------- 事件流 ---------- */
+.stream {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 22px;
+  min-height: 0;
+  /*
+   * ⚠️ 这里**不要**加 scroll-behavior: smooth。
+   *
+   * 它只影响程序化滚动(不影响滚轮手感),而我们的自动跟随正是程序化滚动:
+   * 声明 smooth 后 `scrollTop = scrollHeight` 变成动画,动画中间帧不断触发
+   * scroll 事件且当时离底部很远,把「贴底」标志翻成 false,自动跟随就此失效。
+   * 详见 usePinToBottom.ts 的注释。
+   */
+}
+
+.empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--fg-2);
+  text-align: center;
+}
+
+.empty .big {
+  font-size: 30px;
+  opacity: 0.5;
+}
+
+.empty .sub {
+  font-size: 12px;
+  color: var(--fg-2);
+  opacity: 0.85;
+}
+
+/* 用户往上翻之后出现的一键复位。滚动跟随被用户主动打断时才显示 */
+.jump-bottom {
+  position: absolute;
+  right: 26px;
+  bottom: 96px;
+  z-index: 5;
+  padding: 5px 13px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  background: var(--bg-3);
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 38%);
+}
+
+.bubble {
+  max-width: 900px;
+  margin: 0 auto 12px;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-1);
+}
+
+.bubble.user {
+  background: var(--accent-dim);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 900px;
+}
+
+.bubble .who {
+  font-size: 10.5px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--fg-2);
+  margin-bottom: 5px;
+}
+
+.bubble.user .who {
+  color: color-mix(in srgb, var(--fg-0) 70%, transparent);
+}
+
+.bubble .txt {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/*
+ * 事件类型的区分靠**标签颜色 + 底色**,不靠粗色条。
+ *
+ * 每个气泡本来就有 .who 文字标签("思考"/"调用工具 · X"/"工具结果"/"错误"),
+ * 再压一条 3px 饱和色条属于重复表达,而且会变成整屏最抢眼的东西。
+ * 这里保留 2px、且混入 border 色把饱和度压下来的细线 —— 长对话里
+ * 扫一眼分组仍然有用,但不再喧宾夺主。强色交给标签文字承担。
+ */
+.bubble.thinking {
+  border-left: 2px solid color-mix(in srgb, var(--think) 45%, var(--border));
+  background: color-mix(in srgb, var(--think) 8%, var(--bg-1));
+  color: var(--fg-1);
+  font-style: italic;
+}
+
+.bubble.thinking .who {
+  color: var(--think);
+}
+
+.bubble.tool {
+  border-left: 2px solid color-mix(in srgb, var(--warn) 45%, var(--border));
+  background: color-mix(in srgb, var(--warn) 7%, var(--bg-1));
+}
+
+.bubble.tool .who {
+  color: var(--warn);
+}
+
+.bubble.tool-result {
+  border-left: 2px solid color-mix(in srgb, var(--fg-2) 45%, var(--border));
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font-family: var(--mono);
+  font-size: 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.bubble.tool-result .who {
+  color: var(--fg-1);
+}
+
+.bubble.tool-result.is-error {
+  border-left-color: color-mix(in srgb, var(--err) 45%, var(--border));
+  color: var(--err);
+}
+
+.bubble.tool-result.is-error .who {
+  color: var(--err);
+}
+
+.bubble.error {
+  border-left: 2px solid color-mix(in srgb, var(--err) 45%, var(--border));
+  background: color-mix(in srgb, var(--err) 9%, var(--bg-1));
+  color: var(--err);
+}
+
+.bubble.error .who {
+  color: var(--err);
+}
+
+.rawline {
+  max-width: 900px;
+  margin: 0 auto 8px;
+  border-left: 2px solid var(--border-strong);
+  padding-left: 10px;
+}
+
+.rawline > summary {
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-2);
+  padding: 2px 0;
+  user-select: none;
+}
+
+.rawline > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rawline > summary::before {
+  content: "▸ ";
+  opacity: 0.7;
+}
+
+.rawline[open] > summary::before {
+  content: "▾ ";
+}
+
+.rawline > summary:hover {
+  color: var(--fg-1);
+}
+
+.rawline .tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  color: var(--fg-2);
+  font-size: 10px;
+  letter-spacing: 0.4px;
+}
+
+.result-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--fg-1);
+}
+
+pre.code {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  max-height: 260px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--fg-1);
+}
+
+/* ---------- 输入区 ---------- */
+.composer {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+  background: var(--bg-1);
+  padding: 12px 22px 14px;
+}
+
+.composer .row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.composer textarea {
+  flex: 1;
+  resize: none;
+  font: inherit;
+  color: var(--fg-0);
+  background: var(--bg-0);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  min-height: 46px;
+  max-height: 200px;
+  outline: none;
+}
+
+.composer textarea:focus {
+  border-color: var(--accent);
+}
+
+.composer .hint {
+  max-width: 900px;
+  margin: 7px auto 0;
+  font-size: 11px;
+  color: var(--fg-2);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.composer .hint .live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--warn);
+  font-family: var(--mono);
+}
+
+/* ---------- 设置抽屉 ---------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 55%);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 40;
+}
+
+.drawer {
+  width: min(560px, 92vw);
+  height: 100%;
+  background: var(--bg-1);
+  border-left: 1px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.drawer-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  /* 与 .stream 同理:平滑滚动会让"贴底"判断错乱,这里也不需要动画 */
+  scroll-behavior: auto;
+}
+
+.drawer-body h3 {
+  margin: 20px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.drawer-body h3:first-child {
+  margin-top: 0;
+}
+
+.drawer-foot {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+/* 需要重启才生效的提示条 —— 用 warn 色,但比 .note.warn 更强制 */
+.restartbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  font-size: 12.5px;
+}
+
+.restartbar code {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  color: var(--warn);
+  font-size: 11.5px;
+}
+
+.restartbar .spacer {
+  flex: 1;
+}
+
+/* ---------- 设置表单 ---------- */
+
+.field {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.field:last-child {
+  border-bottom: none;
+}
+
+.flabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.flabel input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.fnum {
+  width: 96px;
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-0);
+  color: var(--fg-0);
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.fnum:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.field.inline .flabel {
+  /* 数字在前、标签在后时,让数字列对齐 */
+  min-width: 0;
+}
+
+.fhint {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--fg-2);
+  line-height: 1.5;
+}
+
+/* 勾选框有 15px 宽度 + 8px 间距,说明文字跟着缩进对齐标签文字 */
+.flabel:has(input[type='checkbox']) + .fhint {
+  margin-left: 23px;
+}
+
+/* 数字输入固定 96px + 8px 间距 */
+.field.inline .fhint {
+  margin-left: 104px;
+}
+
+/*
+ * 文本类字段(路径、命令)。标签放上面、输入框铺满一行:
+ * 路径一定比任何"舒服的固定宽度"长,挤在右边只会逼用户左右拖。
+ */
+.fcap {
+  font-size: 12.5px;
+  color: var(--fg-1);
+  margin-bottom: 5px;
+}
+
+.fpath {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-0);
+  color: var(--fg-0);
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.fpath:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 表单里并排的操作按钮 */
+.btnrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+button.tiny {
+  padding: 1px 7px;
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+/* 与 .note.ok 对称的失败态 */
+.note.err {
+  color: var(--err);
+}
+
+/* 长命令/长路径必须能自己换行,否则会把抽屉撑宽 */
+.note code {
+  word-break: break-all;
+}
+
+/* ---------- 内存表 ---------- */
+
+.badge.mem {
+  cursor: default;
+}
+
+.badge.mem .mem-sub {
+  color: var(--fg-2);
+  font-size: 10.5px;
+}
+
+.memlist {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.memrow {
+  display: grid;
+  grid-template-columns: 74px 1fr 62px 74px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-family: var(--mono);
+}
+
+.memtype {
+  color: var(--fg-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.membar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.membar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+}
+
+.memval {
+  text-align: right;
+  color: var(--fg-0);
+}
+
+.mempk {
+  color: var(--fg-2);
+  font-size: 10.5px;
+  text-align: right;
+}
+
+.kv.total {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.kv.total .v {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- 技能抽屉 ---------- */
+
+/* 成功确认(「已装好 X」)。和 .note.warn / .errbox 同一套语义色 */
+.note.ok {
+  color: var(--ok);
+}
+
+.skill-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.skill-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+
+/*
+ * 停用的行整体压暗。
+ * 不用 `opacity` —— 那会把里面的按钮一起变淡,让人以为按钮也是禁用的。
+ * 只降文字和边框的对比,控件保持原样。
+ */
+.skill-row.off {
+  background: transparent;
+}
+
+.skill-row.off .skill-name,
+.skill-row.off .skill-desc {
+  color: var(--fg-2);
+}
+
+.skill-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skill-name {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--fg-0);
+  word-break: break-all;
+}
+
+.skill-state {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.skill-state.on {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+
+.skill-state.off {
+  color: var(--fg-2);
+  background: var(--bg-3);
+}
+
+.skill-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--fg-1);
+  /* 长 description 最多三行 —— 列表要能一眼扫完,细节让用户去看 SKILL.md */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.skill-desc.empty {
+  color: var(--fg-2);
+  font-style: italic;
+}
+
+.skill-issue {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--warn);
+}
+
+.skill-issue.err {
+  color: var(--err);
+}
+
+.skill-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--fg-2);
+}
+
+.skill-invoke {
+  font-family: var(--mono);
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.skill-origin {
+  /* 来源可能很长(带完整路径),别把这一行撑破 */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-empty {
+  margin-top: 20px;
+  text-align: center;
+  color: var(--fg-2);
+  font-size: 13px;
+}
+
+.skill-empty .sub {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--fg-2);
+  max-width: 380px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 抽屉底部那行说明:占满剩余宽度,不要被 flex 挤成一条 */
+.drawer-foot .note {
+  margin-top: 0;
+  flex: 1;
+}
+
+/* ---------- 首次运行引导横幅 ---------- */
+
+/*
+ * 放在 topbar 与 body 之间占地一整行,所以是 flex: 0 0 auto ——
+ * 不能跟着 body 一起被拉伸,否则画布会被压掉一截。
+ * 配色用 warn 而不是 err:还没装 CLI 是"未就绪",不是"出错了"。
+ */
+.firstrun {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 9px 14px;
+  background: color-mix(in srgb, var(--warn) 11%, var(--bg-1));
+  border-bottom: 1px solid color-mix(in srgb, var(--warn) 38%, transparent);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.firstrun .fr-icon {
+  color: var(--warn);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.firstrun .fr-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.firstrun .fr-title {
+  color: var(--fg-0);
+}
+
+.firstrun .fr-hint {
+  margin-top: 2px;
+  color: var(--fg-1);
+}
+
+/* 安装命令要能被完整选中复制,而且长命令必须自己换行 */
+.firstrun .fr-hint code {
+  margin: 0 2px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-0);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  word-break: break-all;
+}
+
+.firstrun .fr-err {
+  color: var(--err);
+}
+
+.firstrun .fr-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+/* 横幅里的按钮要压扁一点,否则整条会显得头重脚轻 */
+.firstrun .fr-actions button {
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
+.firstrun .fr-actions button.tiny {
+  padding: 2px 6px;
+  margin-left: 0;
+}
+
+/* ============================================================
+   模型服务商(设置页)与节点上的模型选择(v0.4.0)
+   ============================================================ */
+
+/* 分组:一个可折叠块。默认收起大部分,否则十几家平铺会把设置页撑爆 */
+.provider-group {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.provider-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg-2);
+  color: var(--fg-1);
+  border: none;
+  border-radius: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.provider-group-head:hover {
+  background: var(--bg-3);
+}
+
+.provider-group-head .caret {
+  color: var(--fg-2);
+  font-size: 10px;
+}
+
+/* 组头的 N/M 计数推到右边,不跟组名挤在一起 */
+.provider-group-head .count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--fg-2);
+}
+
+/* 单家服务商:一块浅底卡片,和组头的深底拉开层级 */
+.provider-card {
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-1);
+}
+
+.provider-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.provider-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-1);
+}
+
+/* 脱敏 Key 用等宽 + 淡色,一眼看出是"只给认,不给抄" */
+.provider-mask {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-2);
+  background: var(--bg-0);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* 「申请 Key ↗」不是真链接(走 window.open),所以是 button,但要长得像链接 */
+button.tiny-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+button.tiny-link:hover {
+  text-decoration: underline;
+}
+
+/* 卡片的按钮行要能换行 —— 小窗口下四个控件一行放不下 */
+.provider-card .btnrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.provider-card .btnrow .fkey {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+
+/* Key 输入框:等宽,和它旁边的地址框口径一致 */
+.fkey {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg-1);
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  outline: none;
+}
+
+.fkey:focus {
+  border-color: var(--accent);
+}
+
+.fkey:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* 卡片里的字段提示:把刷新按钮与来源说明放在一行 */
+.provider-card .fhint .hint,
+.provider-card .hint {
+  color: var(--fg-2);
+  font-size: 11px;
+}
+
+/* 节点上的模型行里那句"还没配 Key"用 warn 色 */
+.cfglabel + .fhint .warn {
+  color: var(--warn);
+}
+
+/* ---------- 可搜索模型框(ModelCombobox) ----------
+ *
+ * 视觉刻意贴着既有的 .cfglabel input / .badge 走,不另起一套:
+ * 输入框那一行完全继承 .cfglabel 的样式(见 canvas.css),这里只补
+ * "浮动候选层"与"列表项"这两块 .cfglabel 没有的东西。
+ *
+ * z-index 要够高:候选层是 absolute,父级 .cfglabel 与右栏容器都可能
+ * 叠在上面 —— 之前用 z-index:1 时它被右栏的 section 盖掉,症状是
+ * "能看到候选但点不到"。
+ */
+.model-combo {
+  position: relative;
+}
+
+.model-combo-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 260px;
+  overflow-y: auto;
+  /* 与右栏卡片同底色 + 更强的描边,让它明确浮在内容之上 */
+  background: var(--bg-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  padding: 4px;
+}
+
+/* 列表项:label 与 id 挤在一行,id 省略号截断 —— 长的接入点 id 不能把整行撑开 */
+.model-combo-list button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 7px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--fg-0);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.model-combo-list button:hover {
+  background: var(--bg-2);
+}
+
+/*
+ * 焦点环走系统默认(:focus-visible 由浏览器给),不自己画高亮 ——
+ * 与 Canvas 的类型选择菜单一致:菜单项拿的是真实 DOM 焦点。
+ */
+.model-combo-list button:focus {
+  background: var(--bg-3);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* label 占了空间就不让它被挤没,id 才是可以截断的那个 */
+.model-combo-list .mc-label {
+  flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* id 用等宽字体,方便逐字核对 —— 模型名写错一个字符就是 404 */
+.model-combo-list .mc-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-combo-list .badge {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+/* 没匹配时那句人话。用 fg-1 而不是 warn:它不是警告,是"照样能用"的确认 */
+.model-combo-list .mc-empty {
+  padding: 7px;
+  font-size: 11.5px;
+  color: var(--fg-1);
+  line-height: 1.5;
+}
+
+.model-combo-list .mc-hint {
+  padding: 4px 7px 2px;
+  font-size: 11px;
+  color: var(--fg-2);
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+
+/* ---------- 模型可用性探测(设置页服务商卡片) ----------
+ *
+ * 全部用既有变量与既有控件(`.membar` 进度条、`.badge` 三档语义、`.fkey` 输入框),
+ * 不另起一套视觉 —— 这一块与卡片上的其它行必须看起来是同一个东西。
+ *
+ * 三组结果的配色刻意各自绑定语义变量:`--ok` / `--err` / `--warn`。
+ * 第三组(跳过)用 warn 而不是 err,是因为它的真实含义是"**没测出来**",
+ * 不是"测出来不行" —— 两者用同一个颜色就是把限流说成了模型不存在,
+ * 那正是这套设计要避免的事(见 shared/probe.ts 顶部)。
+ */
+
+.probe-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 4px;
+}
+
+/* 成本告知那句:比按钮次要,但不能弱到看不见 —— 它是"点一次扣一次费"的知情 */
+.probe-bar .hint {
+  color: var(--fg-2);
+  font-size: 11px;
+  flex: 1 1 100%;
+  line-height: 1.5;
+}
+
+.probe-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 160px;
+  min-width: 140px;
+}
+
+/* 进度条复用 .membar 的高度与配色,这里只管它在按钮行里的排布 */
+.probe-progress .membar {
+  flex: 1;
+  min-width: 60px;
+}
+
+/* 手填候选那一行。与上面的 Key 输入框同一套 `.fkey` 视觉 */
+.probe-manual {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.probe-manual .fkey {
+  flex: 1 1 200px;
+  min-width: 140px;
+}
+
+/* 已加入候选的名字。给一点背景色,让"这些会被一起验证"一眼可见 */
+.probe-manual-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 6px;
+}
+
+.probe-manual-list .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+
+.probe-manual-list code {
+  font-size: 10.5px;
+  background: none;
+  padding: 0;
+}
+
+/* 移除按钮:一个小 ×,与 .tiny-link 同一套"看起来不是按钮"的处理 */
+.probe-remove {
+  background: none;
+  border: none;
+  color: var(--fg-2);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+/* 本地开源大模型引导卡(v0.4.1):设置页顶部,Ollama / LM Studio 一键说明 */
+.local-models-note {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border, #444);
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-dim, #bbb);
+  max-width: 640px;
+}
+.local-models-note code {
+  font-family: var(--mono, ui-monospace, monospace);
+  background: rgba(128, 128, 128, 0.12);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+/* A4:最近手填过的模型名 —— 可点选加入候选的 chips */
+.probe-recent {  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 6px;
+  max-width: 560px;
+}
+
+.probe-recent .badge.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  background: var(--bg-2);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  padding: 1px 7px;
+  border-radius: 999px;
+  max-width: 260px;
+  overflow: hidden;
+}
+
+.probe-recent .badge.chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.probe-recent .badge.chip code {
+  font-size: 10.5px;
+  background: none;
+  padding: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.probe-recent .hint {
+  white-space: nowrap;
+}
+
+.probe-remove:hover {
+  color: var(--err);
+}
+
+.probe-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 三组结果的容器。每组之间留白,因为它们是**三种不同的结论** */
+.probe-result {
+  margin: 8px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-0);
+}
+
+.probe-group {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.probe-group:last-child {
+  border-bottom: none;
+}
+
+.probe-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.probe-group-head .count {
+  color: var(--fg-2);
+  font-size: 11px;
+}
+
+/* 单个模型一行:可用的做成按钮(点了就选用),其余是静态的说明行 */
+.probe-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 3px 5px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  font-size: 11.5px;
+  color: var(--fg-1);
+  line-height: 1.45;
+}
+
+.probe-item code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-2);
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* 可用的那组:可点,hover 要有反馈 —— 这是"直接选用"那一步的入口 */
+button.probe-item {
+  cursor: pointer;
+}
+
+button.probe-item:hover {
+  background: var(--bg-2);
+}
+
+button.probe-item:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+button.probe-item.ok code {
+  border-left: 2px solid var(--ok);
+}
+
+/* 不可用:左边一道 err 色条,一眼可辨但不刺眼 */
+.probe-item.missing code {
+  border-left: 2px solid var(--err);
+}
+
+/* 跳过:左边一道 warn 色条。⚠️ 刻意用 warn 而不是 err —— 见本节顶部 */
+.probe-item.skipped code {
+  border-left: 2px solid var(--warn);
+}
+
+/* 原因文字换行显示,不截断 —— 用户要能读完"为什么是这一档" */
+.probe-item .hint {
+  color: var(--fg-2);
+  font-size: 10.5px;
+  flex: 1;
+  min-width: 0;
+}
+
+.probe-item.missing .hint,
+.probe-item.skipped .hint {
+  color: var(--fg-2);
+}
+
+/* 节点面板里"有 N 个探测验证过可用"那一行 */
+.fhint .ok {
+  color: var(--ok);
+}

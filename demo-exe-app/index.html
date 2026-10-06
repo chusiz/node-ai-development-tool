@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>像素地牢素材集</title>
+  <style>
+    body { margin: 0; font-family: 'Microsoft YaHei', sans-serif; background: #141019; color: #e8e0d0; }
+    header { padding: 20px 32px; background: linear-gradient(180deg, #241b30, #141019); border-bottom: 2px solid #5a4a72; }
+    header h1 { margin: 0 0 6px; font-size: 24px; color: #ffd98a; letter-spacing: 2px; }
+    header p { margin: 0; color: #b8a8c8; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; padding: 28px 32px; }
+    .card { background: #1e1826; border: 1px solid #3a3050; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+    .card .tag { padding: 8px 14px; font-size: 13px; color: #ffd98a; background: #2a2238; border-bottom: 1px solid #3a3050; }
+    .card img { width: 100%; display: block; image-rendering: pixelated; }
+    .card .desc { padding: 8px 14px; font-size: 12px; color: #9a8cb0; }
+    footer { padding: 14px 32px; color: #6a5c80; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>像素地牢 · 全套素材集</h1>
+    <p>7 张素材全部由「chusiz 图像节点 · 本地模型直出」生成,经交接节点交给软件节点,由输出节点打包为 exe</p>
+  </header>
+  <div class="grid">
+    <div class="card"><div class="tag">场景 · 地牢全景</div><img src="assets/scene.png" alt="地牢场景" /><div class="desc">等轴测地牢主场景:石墙、火把、祭坛、木门</div></div>
+    <div class="card"><div class="tag">人物 · 勇者</div><img src="assets/hero.png" alt="勇者" /><div class="desc">蓝银铠甲战士与多角色立绘</div></div>
+    <div class="card"><div class="tag">怪物 · 史莱姆</div><img src="assets/slime.png" alt="史莱姆" /><div class="desc">绿色怪物精灵表 / 变体</div></div>
+    <div class="card"><div class="tag">怪物 · 骷髅</div><img src="assets/skeleton.png" alt="骷髅" /><div class="desc">5 个暗黑骷髅系敌人</div></div>
+    <div class="card"><div class="tag">怪物 · 幽灵</div><img src="assets/ghost.png" alt="幽灵" /><div class="desc">蝙蝠翼暗黑角色 + 幽灵</div></div>
+    <div class="card"><div class="tag">UI · 界面面板</div><img src="assets/ui.png" alt="UI 面板" /><div class="desc">对战面板、物品栏、血条、按钮</div></div>
+    <div class="card"><div class="tag">物品 · 道具图标</div><img src="assets/items.png" alt="物品" /><div class="desc">宝箱、金币、宝石、药水</div></div>
+  </div>
+  <footer>打包目标:Windows 单文件 exe(portable)· electron 38 · 素材 512×512 本地直出</footer>
+</body>
+</html>
