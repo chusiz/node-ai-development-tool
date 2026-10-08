@@ -185,11 +185,13 @@ export default function App(): JSX.Element {
           saving && <span className="badge">保存中…</span>
         )}
 
+        {/* Claude CLI 状态:绿 = 已检测到,红 = 未检测到。图标化,悬停显示版本与路径 */}
         <span
-          className={cli ? 'badge ok' : 'badge err'}
-          title={bootErr ?? (cli ? cli.exe : '未检测到 claude')}
+          className={cli ? 'badge ok cli-flag' : 'badge err cli-flag'}
+          title={bootErr ?? (cli ? `claude ${cli.version ?? '?'} — ${cli.exe}` : '未检测到 claude')}
+          aria-label={cli ? `claude ${cli.version ?? '?'}` : '未检测到 claude'}
         >
-          {cli ? `claude ${cli.version ?? '?'}` : '未检测到 claude'}
+          <Icon name="terminal" size={12} />
         </span>
 
         <MemoryMeter />
