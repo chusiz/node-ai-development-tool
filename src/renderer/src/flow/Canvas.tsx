@@ -424,7 +424,7 @@ function CanvasInner(): JSX.Element {
           </span>
         ) : (
           <span className="hint-inline">
-            拖节点 · 拉右边的点连线 · 鼠标移到线上剪断 · 点节点在右栏对话 ·{' '}
+            拖节点 · 拉右边的点连线 · 鼠标移到线上按 E 剪断 · 点节点在右栏对话 ·{' '}
             <button
               className="linklike"
               title="全部快捷键 (?)"

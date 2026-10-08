@@ -153,17 +153,19 @@ export default function App(): JSX.Element {
           ))}
         </select>
 
-        {/* 工作区切换:生图 / 软件制作 两个独立页面 */}
+        {/* 工作区切换:生图 / 软件制作 两个独立页面(图标化,悬停显示名称) */}
         <div className="ws-tabs" role="tablist">
           {WORKSPACE_LIST.map((ws) => (
             <button
               key={ws}
               role="tab"
               aria-selected={workspace === ws}
+              title={WORKSPACE_LABEL[ws]}
+              aria-label={WORKSPACE_LABEL[ws]}
               className={workspace === ws ? 'ws-tab on' : 'ws-tab'}
               onClick={() => setWorkspace(ws)}
             >
-              {WORKSPACE_LABEL[ws]}
+              <Icon name={ws === 'app' ? 'terminal' : 'image'} size={14} />
             </button>
           ))}
         </div>
@@ -191,9 +193,8 @@ export default function App(): JSX.Element {
         </span>
 
         <MemoryMeter />
-        <button onClick={() => setShowSkills(true)} title="管理已安装的技能">
-          <Icon name="skill" size={13} />
-          技能
+        <button onClick={() => setShowSkills(true)} title="管理已安装的技能" aria-label="管理已安装的技能">
+          <Icon name="skill" size={14} />
         </button>
         <button
           className="ghost"
@@ -203,9 +204,8 @@ export default function App(): JSX.Element {
         >
           <Icon name="keyboard" size={14} />
         </button>
-        <button onClick={() => setShowSettings(true)} title="设置 (Ctrl+,)">
-          <Icon name="settings" size={13} />
-          设置
+        <button onClick={() => setShowSettings(true)} title="设置 (Ctrl+,)" aria-label="设置 (Ctrl+,)">
+          <Icon name="settings" size={14} />
         </button>
 
         {/* 无边框窗口的自绘窗口控制 —— 必须顶栏最后一个,固定贴右缘 */}

@@ -340,36 +340,7 @@
  *
  * 鏄鹃殣鐢辩粍浠剁殑 hover 鐘舵€佺粰(.on),涓嶆槸 CSS `:hover` 鈥斺€?鍘熷洜瑙?CuttableEdge 鐨勬敞閲娿€?
  */
-.edge-cut {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-  display: grid;
-  place-items: center;
-  width: auto;
-  height: auto;
-  padding: 3px 9px;
-  font-size: 11px;
-  line-height: 1.4;
-  white-space: nowrap;
-  color: var(--fg-1);
-  background: var(--bg-2);
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-}
-
-.edge-cut.on {
-  opacity: 1;
-  pointer-events: all;
-}
-
-/* 鎸変笅鍘昏繖鏉＄嚎灏辨病浜?鎵€浠ユ偓鍋滄椂鏌撴垚鍗遍櫓鑹?鈥斺€?瀹冧笉璇ラ暱寰楄窡鏅€氭寜閽竴鏍?*/
-.edge-cut:hover {
-  color: var(--err);
-  border-color: var(--err);
-}
+/* 连线悬停:按 E 剪断。高亮色由组件内联 style 生效(见 CuttableEdge) */
 
 .react-flow__controls-button {
   background: var(--bg-2);

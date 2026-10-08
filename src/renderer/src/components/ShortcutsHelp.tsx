@@ -48,7 +48,7 @@ const GROUP_ICON: Record<ShortcutGroup, IconName> = {
 const MOUSE_OPS: { icon: IconName; keys: string; label: string; hint?: string }[] = [
   { icon: 'mouse', keys: '拖动节点', label: '移动节点位置', hint: '位置会随画布一起存盘' },
   { icon: 'play', keys: '拖右侧圆点', label: '连线到另一个节点', hint: '方向不对的连线会被当场拒绝并说明原因' },
-  { icon: 'scissors', keys: '鼠标移到线上', label: '出现剪刀,点一下切断', hint: '也可以点选连线后按 Delete' },
+  { icon: 'scissors', keys: '鼠标移到线上按 E', label: '剪断连线', hint: '也可以点选连线后按 Delete' },
   { icon: 'dot', keys: '双击节点标题', label: '就地改名', hint: '不用跑到右栏的配置页' },
   { icon: 'search', keys: '滚轮', label: '上下平移画布' },
   { icon: 'plus', keys: '空白处拖拽', label: '框选多个节点', hint: '选中后可一起拖动 / 删除' },

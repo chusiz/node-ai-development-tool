@@ -1,33 +1,29 @@
-import { useRef, useState, type JSX, type MouseEvent } from 'react'
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from '@xyflow/react'
+import { useEffect, useRef, useState, type JSX, type MouseEvent } from 'react'
+import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react'
 import { useGraphStore } from '../stores/graphStore'
 import { useUiStore } from '../stores/uiStore'
-import { Icon } from '../components/Icons'
 
 /**
- * 可切断的连线。
+ * 可切断的连线 —— **悬停 + 按 E 剪断**。
  *
- * ## 为什么需要它
+ * ## 为什么不用中点按钮
  *
- * React Flow 默认的连线**只有加法没有减法**:拉得出来,拆不掉。
- * 想拆只能把某一端的节点删了重画 —— 而节点上挂着对话历史和运行记录,
- * 为拆一根线付这个代价明显不合理。所以每条线中点挂一个剪刀,
- * 鼠标移到线上才浮现,点一下断开。
+ * 之前在中点挂一个剪刀/文字按钮,一是图标在小尺寸下视觉不居中,
+ * 二是按钮会挡住对连线的直接操作。现在的交互:
+ * 鼠标悬停到线上 → 线高亮成强调色 → 按 `E` 键即剪断。
+ * 悬停时线本身显示系统 tooltip「按 E 剪断连线」,鼠标移开即消失。
  *
  * ## 为什么悬停状态用 React state 而不是 CSS `:hover`
  *
- * 剪刀是渲染进 `EdgeLabelRenderer` 的,它被 portal 到 `.react-flow__edgelabel-renderer`
- * 那一层 —— 和 `<g class="react-flow__edge">` **不是父子关系**。
- * 所以 `.react-flow__edge:hover .edge-cut { … }` 这种后代选择器永远匹配不上,
- * 只能由组件自己记。悬停事件挂在包住 `BaseEdge` 的 `<g>` 上:
- * 指针落在路径上时 mouseover 会冒泡上来。
+ * 悬停事件挂在包住 `BaseEdge` 的 `<g>` 上 —— 指针落在路径上时
+ * mouseover 会冒泡上来,状态由组件自己记,不依赖后代选择器。
  *
- * ## 为什么"隐藏"要延迟 140ms
+ * ## 为什么 E 键只在自己的 `hot` 为真时生效
  *
- * 指针从线上的路径移到剪刀上时,路径先收到 mouseleave、按钮再收到 mouseenter。
- * 若 mouseleave 当场把状态置 false,按钮就在指针落上去的前一帧消失了 ——
- * 表现出来就是「剪刀看得见,但点不到」。延迟一下、并在按钮自己进入时
- * 取消这只定时器,就绕开了这个空档。
+ * 同一时刻鼠标只悬停在一根线上,其它边的 `hot` 都是 false,
+ * 所以每条边各挂一个 keydown 监听不会互相抢 —— 按 E 删的
+ * 一定是当前指针下的那根线。`input` / `textarea` / 可编辑元素
+ * 聚焦时不响应(用户在打字,不能误删)。
  *
  * ## 为什么把 markerStart / markerEnd / style / interactionWidth 原样透传
  *
@@ -50,10 +46,9 @@ export function CuttableEdge({
   markerStart,
   markerEnd,
   style,
-  selected,
   interactionWidth,
 }: EdgeProps): JSX.Element {
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -65,7 +60,7 @@ export function CuttableEdge({
   const removeEdge = useGraphStore((s) => s.removeEdge)
 
   const [hot, setHot] = useState(false)
-  /** 延迟隐藏的定时器。放在 ref 里:它不参与渲染,变了也不该触发重渲染 */
+  /** 延迟熄灭的定时器。放在 ref 里:它不参与渲染,变了也不该触发重渲染 */
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const cancelHide = (): void => {
@@ -76,7 +71,6 @@ export function CuttableEdge({
   }
   /*
    * 悬停 = 打开**上游的数据探针**(它交出了什么)。
-   * 剪刀按钮的 onMouseEnter 也走 enter —— 指针从线挪到剪刀上时探针不闪。
    * 没跑过的上游由 ProbeCard 自己决定不显示,这里无需判断。
    */
   const enter = (e: MouseEvent): void => {
@@ -93,51 +87,39 @@ export function CuttableEdge({
     }, 140)
   }
 
-  /** 被 React Flow 选中时也常驻显示 —— 不然"选中了却看不见操作入口"很别扭 */
-  const shown = hot || !!selected
+  /*
+   * E 键剪断:只在当前边被悬停时生效。
+   * 悬停瞬间才挂监听,移开就撤 —— 不干扰全局快捷键表。
+   */
+  useEffect(() => {
+    if (!hot) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key.toLowerCase() !== 'e') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      e.preventDefault()
+      cancelHide()
+      removeEdge(id)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [hot, id, removeEdge])
 
   return (
-    <>
-      <g onMouseEnter={enter} onMouseLeave={leave}>
-        <BaseEdge
-          id={id}
-          path={edgePath}
-          markerStart={markerStart}
-          markerEnd={markerEnd}
-          style={style}
-          interactionWidth={interactionWidth}
-        />
-      </g>
-
-      <EdgeLabelRenderer>
-        <button
-          type="button"
-          className={`edge-cut nodrag nopan${shown ? ' on' : ''}`}
-          /*
-           * EdgeLabelRenderer 的内容定位在画布坐标系里,所以要靠 transform 挪到中点。
-           * translate(-50%,-50%) 让按钮中心对齐中点(而不是左上角对齐)。
-           */
-          style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
-          title="切断这条连线"
-          aria-label="切断这条连线"
-          /*
-           * 点不到的按钮不该占 Tab 位。隐藏时 tabIndex=-1,
-           * 键盘用户走"选中连线 + Delete"那条路(见 shortcuts.ts)。
-           */
-          tabIndex={shown ? 0 : -1}
-          onMouseEnter={enter}
-          onMouseLeave={leave}
-          // pointerdown 也要拦:否则这一下会被画布当成"开始拖框选"的起点
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            cancelHide()
-            removeEdge(id)
-          }}
-        >
-          <span className="edge-cut-label">剪断</span>
-        </button>
-      </EdgeLabelRenderer>
-    </>
+    <g
+      onMouseEnter={enter}
+      onMouseLeave={leave}
+      className={hot ? 'edge-hot' : undefined}
+    >
+      {hot && <title>按 E 剪断连线</title>}
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerStart={markerStart}
+        markerEnd={markerEnd}
+        style={{ ...style, stroke: hot ? 'var(--accent)' : style?.stroke }}
+        interactionWidth={interactionWidth}
+      />
+    </g>
   )
 }
