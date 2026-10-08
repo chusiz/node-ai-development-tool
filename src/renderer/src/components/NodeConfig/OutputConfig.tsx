@@ -133,7 +133,7 @@ export function OutputConfig({ nodeId }: { nodeId: string }): JSX.Element | null
           <span>Android 包名</span>
           <input
             value={opts.appId ?? ''}
-            placeholder="如 com.yourname.app(默认 com.chusiz.app)"
+            placeholder="如 com.yourname.app(默认 com.nodeai.developmenttool)"
             onChange={(e) => patchOptions({ appId: e.target.value })}
           />
         </label>

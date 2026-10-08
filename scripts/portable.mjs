@@ -31,7 +31,7 @@ const SRC = path.join(RELEASE, 'win-unpacked')
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
 const version = pkg.version
 /** zip 内的顶层目录名。带版本号:用户手里可能同时有多个版本,不靠文件夹名区分就会互相覆盖 */
-const INNER_DIR = `chusiz-${version}-portable`
+const INNER_DIR = `node-ai-development-tool-${version}-portable`
 const ZIP = path.join(RELEASE, `${INNER_DIR}.zip`)
 
 function die(msg) {
@@ -61,20 +61,20 @@ console.log('✓ 已写入 portable.flag(数据将保存在程序目录内的 da
  * UTF-8 **带 BOM**。Windows 记事本对无 BOM 的 UTF-8 在部分版本上会按 GBK 解,
  * 中文直接变乱码 —— 而这份说明就是给"拿到包的人"看的第一个文件,不能乱。
  */
-const README = `chusiz ${version} · 使用说明
+const README = `Node AI Development Tool ${version} · 使用说明
 ================================================
 
 这是什么
-  chusiz 是一个节点式 AI 工作台:把「项目 / 串行功能 / 并行功能 / 整合 / 输出打包」
+  Node AI Development Tool 是一个节点式 AI 工作台:把「项目 / 串行功能 / 并行功能 / 整合 / 输出打包」
   摆成一张图,按连线顺序跑。它本身只是**图形外壳**,真正干活的是本机安装的
   Claude Code CLI —— 所以它不会被打进这个包里,需要自己装一份(见下)。
 
 选哪种用法
-  · 安装版:运行 chusiz-${version}-setup.exe。
+  · 安装版:运行 node-ai-development-tool-${version}-setup.exe。
       装到当前用户目录,自动建桌面/开始菜单快捷方式,可自选安装位置。
-      数据默认在 %APPDATA%\\chusiz,卸载时不会被删除。
+      数据默认在 %APPDATA%\\node-ai-development-tool,卸载时不会被删除。
   · 绿色版(本压缩包):把整个文件夹解压到任意位置(桌面、D 盘、U 盘都行),
-      双击「chusiz.exe」即可,不用安装。
+      双击「node-ai-development-tool.exe」即可,不用安装。
       数据就在同目录的 data\\ 里 —— **拷走整个文件夹,画布和历史一起走**。
 
 前置依赖(必须,否则节点全都跑不起来)
@@ -91,7 +91,7 @@ const README = `chusiz ${version} · 使用说明
 
 数据放在哪
   绿色版:   <本文件夹>\\data\\
-  安装版:   %APPDATA%\\chusiz\\data\\
+  安装版:   %APPDATA%\\node-ai-development-tool\\data\\
 
   里面是画布(graph.json)、每个节点的会话历史与日志、技能库、设置。
   想换位置:设一个环境变量 CHUSIZ_HOME 指到目标目录再启动(只认绝对路径)。
@@ -119,7 +119,7 @@ console.log('✓ 已写入 使用说明.txt')
  *
  * ⚠️ Windows 版 bsdtar 编译时关掉了 `-s`(路径改写),所以不能靠它把 zip 内的
  * 顶层目录改名。改成**先把目录改名、打完再改回来** —— 效果一样,
- * 而且 zip 里就是 `chusiz-<版本>-portable\`,解压出来不会是一个叫
+ * 而且 zip 里就是 `node-ai-development-tool-<版本>-portable\`,解压出来不会是一个叫
  * win-unpacked 的临时名字。
  */
 const TAR = 'C:\\Windows\\System32\\tar.exe'

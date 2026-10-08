@@ -438,7 +438,7 @@ export const useGraphStore = create<GraphState>((set, get) => {
       const { nodes, edges, viewport } = get()
       return JSON.stringify(
         {
-          format: 'chusiz-workflow',
+          format: 'node-ai-development-tool-workflow',
           version: 1,
           nodes: nodes.map((n) => ({
             id: n.id,
@@ -465,8 +465,13 @@ export const useGraphStore = create<GraphState>((set, get) => {
       } catch {
         return { ok: false, error: '文件不是有效的 JSON' }
       }
-      if (wf.format !== 'chusiz-workflow' || !Array.isArray(wf.nodes)) {
-        return { ok: false, error: '不是 chusiz 工作流文件(缺 format: chusiz-workflow 头)' }
+      // 兼容旧格式头(chusiz-workflow / claudecanvas-workflow)
+      const okFormat =
+        wf.format === 'node-ai-development-tool-workflow' ||
+        wf.format === 'chusiz-workflow' ||
+        wf.format === 'claudecanvas-workflow'
+      if (!okFormat || !Array.isArray(wf.nodes)) {
+        return { ok: false, error: '不是 Node AI Development Tool 工作流文件(缺 format 头)' }
       }
       const before = snapshot()
       const nodes = wf.nodes

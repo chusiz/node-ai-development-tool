@@ -114,7 +114,7 @@ python scripts/txt2img.py \
 ## Packaging `.exe`
 
 ```bash
-npm run dist         # builds the installer → dist/chusiz-0.1.0-setup.exe
+npm run dist         # builds the installer → dist/node-ai-development-tool-0.6.6-setup.exe
 npm run icon         # regenerates the app icon
 ```
 

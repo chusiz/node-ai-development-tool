@@ -42,7 +42,7 @@ async function ensurePluginManifest(): Promise<void> {
   }
   await writeJsonAtomic(SKILLS_PLUGIN_FILE, {
     name: SKILLS_PLUGIN_NAME,
-    description: 'chusiz 的技能库 —— 在这里装的技能,画布上所有节点都能用',
+    description: 'Node AI Development Tool 的技能库 —— 在这里装的技能,画布上所有节点都能用',
     version: '1.0.0',
   })
 }

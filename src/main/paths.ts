@@ -65,20 +65,29 @@ function resolveRoot(): { root: string; mode: RootMode } {
   }
 
   try {
-    const newRoot = path.join(app.getPath('appData'), 'chusiz')
-    // 改名迁移:老版本数据在 %APPDATA%\ClaudeCanvas,首次运行搬到新目录,避免用户"数据丢了"
-    const oldRoot = path.join(app.getPath('appData'), 'ClaudeCanvas')
-    if (!fs.existsSync(newRoot) && fs.existsSync(oldRoot)) {
-      try {
-        fs.renameSync(oldRoot, newRoot)
-      } catch {
-        /* 迁移失败(占用/权限)不阻塞启动 —— 数据留在原位,用户仍能读旧目录 */
+    const newRoot = path.join(app.getPath('appData'), 'node-ai-development-tool')
+    // 改名迁移:老版本数据在 %APPDATA%\chusiz 与 %APPDATA%\ClaudeCanvas,
+    // 首次运行搬到新目录,避免用户"数据丢了"(chusiz 已改名为 node-ai-development-tool)
+    const oldRoots = [
+      path.join(app.getPath('appData'), 'chusiz'),
+      path.join(app.getPath('appData'), 'ClaudeCanvas'),
+    ]
+    if (!fs.existsSync(newRoot)) {
+      for (const oldRoot of oldRoots) {
+        if (fs.existsSync(oldRoot)) {
+          try {
+            fs.renameSync(oldRoot, newRoot)
+            break
+          } catch {
+            /* 迁移失败(占用/权限)不阻塞启动 —— 数据留在原位,用户仍能读旧目录 */
+          }
+        }
       }
     }
     return { root: newRoot, mode: 'userdata' }
   } catch {
     // 连 AppData 都拿不到 —— 用 HOME 下的隐藏目录,至少不至于起不来
-    return { root: path.join(os.homedir(), '.chusiz'), mode: 'fallback' }
+    return { root: path.join(os.homedir(), '.node-ai-development-tool'), mode: 'fallback' }
   }
 }
 

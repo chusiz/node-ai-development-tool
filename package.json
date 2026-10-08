@@ -1,5 +1,5 @@
 {
-  "name": "chusiz",
+  "name": "node-ai-development-tool",
   "version": "0.6.6",
   "private": true,
   "description": "节点式 AI 软件/应用/游戏制作工作台:本地模型直出生图、交接节点、Electron exe 打包、视频理解",
@@ -53,9 +53,9 @@
     "electron-winstaller@5.4.0": true
   },
   "build": {
-    "appId": "com.haowan.chusiz",
-    "productName": "chusiz",
-    "copyright": "Copyright © 2026 haowan",
+    "appId": "com.nodeai.developmenttool",
+    "productName": "Node AI Development Tool",
+    "copyright": "Copyright © 2026 chusiz",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -77,7 +77,7 @@
           ]
         }
       ],
-      "artifactName": "chusiz-${version}-setup.${ext}"
+      "artifactName": "node-ai-development-tool-${version}-setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -85,7 +85,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "chusiz",
+      "shortcutName": "Node AI Development Tool",
       "deleteAppDataOnUninstall": false
     }
   }

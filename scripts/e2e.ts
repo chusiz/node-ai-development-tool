@@ -5088,7 +5088,7 @@ async function chartNodeTests(): Promise<void> {
     const os = await import('node:os')
     const fs = await import('node:fs/promises')
     const path = await import('node:path')
-    const dir = path.join(os.tmpdir(), `chusiz-e2e-chart-${Date.now()}`)
+    const dir = path.join(os.tmpdir(), `nodeaidevtool-e2e-chart-${Date.now()}`)
     const gen = new ChartGen()
     const res = await gen.run({
       canvasId: 'c',

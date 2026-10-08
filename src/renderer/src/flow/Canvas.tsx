@@ -355,7 +355,7 @@ function CanvasInner(): JSX.Element {
                     const res = await window.api.dialog.saveFile(
                       '导出工作流',
                       'workflow.json',
-                      [{ name: 'chusiz 工作流', extensions: ['json'] }],
+                      [{ name: 'Node AI Development Tool 工作流', extensions: ['json'] }],
                     )
                     if (!res.ok || !res.data) return
                     const path = res.data
@@ -373,7 +373,7 @@ function CanvasInner(): JSX.Element {
                   setWfMenuOpen(false)
                   void (async () => {
                     const res = await window.api.dialog.pickFile('导入工作流', [
-                      { name: 'chusiz 工作流', extensions: ['json'] },
+                      { name: 'Node AI Development Tool 工作流', extensions: ['json'] },
                       { name: '全部文件', extensions: ['*'] },
                     ])
                     if (!res.ok || !res.data) return

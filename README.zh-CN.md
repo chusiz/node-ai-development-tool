@@ -114,7 +114,7 @@ python scripts/txt2img.py \
 ## 打包 exe
 
 ```bash
-npm run dist         # 打包安装程序 → dist/chusiz-0.1.0-setup.exe
+npm run dist         # 打包安装程序 → dist/node-ai-development-tool-0.6.6-setup.exe
 npm run icon         # 重新生成应用图标
 ```
 

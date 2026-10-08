@@ -541,7 +541,7 @@ async function packageApk(req: BuiltinActionRequest, ctl: ProcControl): Promise<
   }
 
   const appName = (req.buildOptions?.appName ?? '').trim() || 'app'
-  const appId = (req.buildOptions?.appId ?? '').trim() || 'com.chusiz.app'
+  const appId = (req.buildOptions?.appId ?? '').trim() || 'com.nodeai.developmenttool'
   onLine('[APK 打包] 初始化 Android 平台(capacitor add android)…')
   const add = await runNodeProcess(
     ['--run', 'cap', '--', 'add', 'android'],

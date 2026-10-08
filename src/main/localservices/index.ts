@@ -193,7 +193,7 @@ export async function sdStart(port = DEFAULT_SD_PORT, logDir?: string): Promise<
     }
   }
 
-  const logDir2 = logDir ?? path.join(process.env.APPDATA ?? os.tmpdir(), 'chusiz')
+  const logDir2 = logDir ?? path.join(process.env.APPDATA ?? os.tmpdir(), 'node-ai-development-tool')
   await fsp.mkdir(logDir2, { recursive: true })
   const logPath = path.join(logDir2, 'sd-webui.log')
   const outFd = await fsp.open(logPath, 'a')
@@ -232,7 +232,7 @@ export async function sdStart(port = DEFAULT_SD_PORT, logDir?: string): Promise<
 
 export async function sdStop(): Promise<{ ok: boolean; message: string }> {
   if (!managedPid) {
-    return { ok: false, message: '当前没有由 chusiz 启动的 SD 服务在跑(手动开的请自行关窗口)' }
+    return { ok: false, message: '当前没有由本工具启动的 SD 服务在跑(手动开的请自行关窗口)' }
   }
   await killProcessTree(managedPid)
   managedPid = null

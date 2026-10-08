@@ -166,12 +166,12 @@ const backend: McpBackend = {
 async function main(): Promise<void> {
   const server = new McpServer(backend)
   // ⚠️ stdout 只能有 JSON-RPC 消息(MCP stdio 协议),任何日志走 stderr
-  process.stderr.write('chusiz MCP server ready (node-ai-development-tool v0.6.4)\n')
+  process.stderr.write('Node AI Development Tool MCP server ready (v0.6.6)\n')
   const code = await runStdioTransport(server)
   process.exit(code)
 }
 
 void main().catch((e) => {
-  process.stderr.write(`chusiz MCP server fatal: ${(e as Error).message}\n`)
+  process.stderr.write(`Node AI Development Tool MCP server fatal: ${(e as Error).message}\n`)
   process.exit(1)
 })

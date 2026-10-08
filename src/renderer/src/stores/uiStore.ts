@@ -11,10 +11,18 @@ import type { WorkspaceId } from '../../../shared/nodeRegistry'
 export type InspectorTab = 'chat' | 'config'
 
 /** 项目 id 的本地注册表(多项目并行)。画布 id = `<projectId>-<workspace>` */
-const PROJECTS_KEY = 'chusiz.projects.v1'
+const PROJECTS_KEY = 'nodeaidevtool.projects.v1'
+/** 兼容旧键(chusiz / ClaudeCanvas 时代):只读,不回写 */
+const LEGACY_PROJECTS_KEYS = ['chusiz.projects.v1', 'claudecanvas.projects.v1']
 export function loadProjectList(): string[] {
   try {
-    const raw = localStorage.getItem(PROJECTS_KEY)
+    let raw = localStorage.getItem(PROJECTS_KEY)
+    if (!raw) {
+      for (const k of LEGACY_PROJECTS_KEYS) {
+        raw = localStorage.getItem(k)
+        if (raw) break
+      }
+    }
     const arr: unknown = raw ? JSON.parse(raw) : null
     return Array.isArray(arr) && arr.every((x) => typeof x === 'string') && arr.length > 0
       ? (arr as string[])

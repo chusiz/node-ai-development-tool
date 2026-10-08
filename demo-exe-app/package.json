@@ -1,5 +1,5 @@
 {
-  "name": "chusiz-demo-app",
+  "name": "node-ai-development-tool-demo-app",
   "version": "1.0.0",
   "description": "chusiz 全流程验证应用:展示图像节点产出的 UI 素材",
   "main": "main.js",
