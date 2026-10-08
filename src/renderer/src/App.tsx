@@ -18,6 +18,7 @@ import { flushGraphSave, useGraphStore } from './stores/graphStore'
 import { useRuntimeStore } from './stores/runtimeStore'
 import { useUiStore } from './stores/uiStore'
 import { unwrap } from './lib/unwrap'
+import { agentDisplayNameMap } from './lib/agentNames'
 import { canvasIdFor, WORKSPACE_LABEL, type WorkspaceId } from '../../shared/nodeRegistry'
 import { effectiveModel, providerIdOfAgent } from '../../shared/providers'
 import type { DetectResult } from './types'
@@ -109,6 +110,12 @@ export default function App(): JSX.Element {
     selectedNodeId ? s.nodes.find((n) => n.id === selectedNodeId) : undefined,
   )
 
+  /* agent id → 显示名(顶栏 title 里给用户看名字,而不是 claude-cli 这种内部 id) */
+  const [agentNames, setAgentNames] = useState<Record<string, string> | null>(null)
+  useEffect(() => {
+    void agentDisplayNameMap().then(setAgentNames)
+  }, [])
+
   /*
    * 顶栏模型入口的取值优先级:
    *   选中了会话节点 → 显示该节点实际生效的模型(节点显式选的 > 该供应商默认 > 内置首选);
@@ -133,8 +140,11 @@ export default function App(): JSX.Element {
   }, [selectedNode, agentProviders])
 
   const shownModel = selectedNode ? nodeModel : globalModel
+  const agentName = selectedNode
+    ? agentNames?.[selectedNode.data.agentId ?? ''] ?? selectedNode.data.agentId ?? null
+    : null
   const modelTitle = selectedNode
-    ? `节点「${selectedNode.data.title ?? selectedNode.id}」的模型:${shownModel ?? '未配置'} — 每个节点可在节点配置里单独换 AI/agent`
+    ? `节点「${selectedNode.data.title ?? selectedNode.id}」:${agentName ?? '默认 agent'} · ${shownModel ?? '默认模型'} — 每个节点可在节点配置里单独换 AI/agent`
     : shownModel
       ? `全局默认模型:${shownModel} — 点击设置(每个节点可单独配置自己的模型/agent)`
       : '未配置默认模型 — 点击设置(支持火山方舟 / Gemini / 本地模型等)'

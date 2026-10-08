@@ -1,8 +1,11 @@
-import { useEffect, useRef, type JSX } from 'react'
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { useGraphStore } from '../../stores/graphStore'
 import { useRuntimeStore } from '../../stores/runtimeStore'
 import { useUiStore } from '../../stores/uiStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 import { useNodeActions } from '../../hooks/useNodeActions'
+import { agentDisplayNameMap } from '../../lib/agentNames'
+import { effectiveModel, providerIdOfAgent } from '../../../../shared/providers'
 import { NodeConfigPanel } from '../NodeConfig/NodeConfigPanel'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
@@ -24,8 +27,22 @@ export function InspectorPanel(): JSX.Element {
   const node = useGraphStore((s) => s.nodes.find((n) => n.id === selectedNodeId))
   const status = useRuntimeStore((s) => s.runtimes[selectedNodeId ?? '']?.status ?? 'idle')
   const turns = useRuntimeStore((s) => s.runtimes[selectedNodeId ?? '']?.turns ?? 0)
-  const model = useRuntimeStore((s) => s.runtimes[selectedNodeId ?? '']?.model ?? null)
   const diagCount = useRuntimeStore((s) => s.runtimes[selectedNodeId ?? '']?.diagnostics.length ?? 0)
+
+  /* 当前节点用的 agent 显示名(agents.list 的一次性映射,模块级缓存) */
+  const [agentNames, setAgentNames] = useState<Record<string, string> | null>(null)
+  useEffect(() => {
+    void agentDisplayNameMap().then(setAgentNames)
+  }, [])
+
+  /* 节点实际生效的模型:节点显式选的 > 该供应商全局默认 > 内置首选(与运行时一致) */
+  const agentProviders = useSettingsStore((s) => s.payload?.current?.agent?.providers)
+  const effectiveForNode = useMemo(() => {
+    if (!node) return ''
+    const pid = providerIdOfAgent(node.data.agentId)
+    const def = pid ? (agentProviders?.[pid]?.defaultModel ?? '') : ''
+    return effectiveModel(node.data.agentId, node.data.model, def)
+  }, [node, agentProviders])
 
   /*
    * hooks 不能在条件分支之后调用,所以这里先把 actions 拿好
@@ -104,7 +121,18 @@ export function InspectorPanel(): JSX.Element {
         <span className="badge">
           {turns} 轮{turns > 0 ? ` · 续用同一会话` : ''}
         </span>
-        {model && <span className="badge">{model}</span>}
+        {(() => {
+          /* 当前节点实际用的 AI 与 agent:agent 名 + 生效模型(节点选的 > 全局默认) */
+          const aid = node.data.agentId
+          if (!aid) return null
+          const aname = agentNames ? (agentNames[aid] ?? aid) : aid
+          return (
+            <span className="badge node-agent" title="这个节点用的 AI 与模型(可在节点配置里单独更换)">
+              {aname}
+              {effectiveForNode ? ` · ${effectiveForNode}` : ''}
+            </span>
+          )
+        })()}
         {diagCount > 0 && (
           <button className={showDiag ? 'primary mini' : 'mini'} onClick={toggleDiag}>
             诊断 {diagCount}
