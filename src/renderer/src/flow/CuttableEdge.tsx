@@ -135,7 +135,7 @@ export function CuttableEdge({
             removeEdge(id)
           }}
         >
-          <Icon name="scissors" size={12} />
+          <span className="edge-cut-label">剪断</span>
         </button>
       </EdgeLabelRenderer>
     </>

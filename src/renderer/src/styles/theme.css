@@ -60,9 +60,9 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  /* 窗口拉窄时允许折成两行,而不是把徽标挤变形。
-     row-gap 比 gap 小一点,折行后不至于太散 */
-  flex-wrap: wrap;
+  /* 窗口控制按钮必须常驻右上角:一旦允许折行,最小化/最大化/关闭整组会被挤到第二排。
+     空间不足时靠下面的媒体查询收敛次要徽标,而不是让整行换行 */
+  flex-wrap: nowrap;
   gap: 8px 12px;
   padding: 10px 16px;
   background: var(--bg-1);
@@ -85,6 +85,8 @@ body {
   padding: 4px 8px;
   font-size: 12px;
   max-width: 160px;
+  flex-shrink: 1; /* 窄窗口优先压缩项目选择器,而不是把后面的按钮挤下去 */
+  min-width: 0;
   -webkit-app-region: no-drag;
 }
 .project-select:focus {
@@ -127,6 +129,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  flex: 0 0 auto; /* 永不压缩、永不折行 —— 窗口控制按钮必须固定在右上角 */
   margin-right: -8px; /* 抵消 .topbar 的 16px 右 padding,贴到窗口右缘 */
   -webkit-app-region: no-drag;
 }
@@ -150,6 +153,19 @@ body {
 .win-ctl .win-ctl-close:hover {
   background: #c42b1c;
   color: #fff;
+}
+
+/* ---------- 顶栏窄屏收敛 ----------
+   窗口变窄时不折行(折行 = 窗口控制按钮掉到第二排)。
+   逐档隐藏次要徽标,保证「技能 / ? / 设置 / 窗口控制」永远留在首行右侧。 */
+@media (max-width: 1240px) {
+  .topbar .badge.mem { display: none; } /* 内存占用(次要诊断信息) */
+}
+@media (max-width: 1060px) {
+  .topbar .badge:not(.ok):not(.err) { display: none; } /* 画布名/节点数等状态徽标 */
+}
+@media (max-width: 920px) {
+  .topbar .project-dir { display: none; } /* 项目文件夹状态(节点上有完整版) */
 }
 
 .brand {

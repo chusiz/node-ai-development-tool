@@ -346,11 +346,12 @@
   pointer-events: none;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  font-size: 12px;
-  line-height: 1;
+  width: auto;
+  height: auto;
+  padding: 3px 9px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
   color: var(--fg-1);
   background: var(--bg-2);
   border: 1px solid var(--border-strong);
@@ -672,6 +673,8 @@ pre.code.full {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 1; /* 窄窗口优先压缩项目文件夹状态,避免挤动右侧窗口控制按钮 */
+  min-width: 0;
 }
 
 .project-dir.error {
