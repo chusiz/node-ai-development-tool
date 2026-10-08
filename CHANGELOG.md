@@ -2,6 +2,18 @@
 
 本文件记录 Node AI Development Tool（chusiz）的版本演进。版本号与 `package.json` 保持一致，每个 release 绑定 Git Tag（`vX.Y.Z`）。
 
+## [0.6.6] - 2026-10-08 — GitHub 发布页优化（同版本第三批次提交）
+
+### 新增
+- **每个节点卡片显示自己的 AI/agent + 模型徽标（NodeAgentChip）**：画布上每一张节点卡片都在 meta 区显示 `agent 名 · 生效模型`（如 `claude · claude-3-5-sonnet`），窄卡片自动省略号截断、悬停显示完整信息；配合既有 Inspector 徽标与顶栏「当前模型」入口，**每个节点在用什么 AI 一眼可见**。agent 显示名走模块级缓存（`lib/agentNames.ts`），不拖慢画布渲染。
+- **README 中英双语全面重写（v0.6.6 发布页）**：加入真实 UI 截图（主画布 / 节点徽标 / 节点菜单 / 节点配置 / 生图工作区 / 模型设置）、本地模型直出的像素地牢产物 showcase、2 分钟操作演示视频（CDP 实录 + ffmpeg 合成）、完整节点清单与详细资料；结尾新增「欢迎有人继续这个项目」中英双语段落。
+- 新增 CDP 采集脚本 `scripts/cdp-shots.mjs` / `cdp-video.mjs`（真实 UI 截图与录屏，供后续文档迭代复用）。
+
+### 验证
+- `npm run typecheck:node` / `typecheck:web` 双 0 错。
+- `npm run e2e`：**通过 1277 / 跳过 10（LLM 402）/ 失败 0**（日志 `e2e-v066f.log`）。
+- 截图 6 张 + 演示视频（16s @5fps，0.33MB）已并入仓库 `screenshots/` 与 `showcase/`。
+
 ## [0.6.6] - 2026-10-08 — UI/UX 收尾（同版本第二批次提交）
 
 ### 修复与体验

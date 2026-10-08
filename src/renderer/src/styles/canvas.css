@@ -775,6 +775,30 @@ button.ghost.on {
   gap: 6px;
 }
 
+/* 每个节点卡片上的 AI 徽标:agent 名 + 生效模型。窄卡片也不挤爆,长模型名省略 */
+.node-agent-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--fg-2);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.node-agent-chip svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
 .agent-node-cwd {
   flex: 1;
   min-width: 0;

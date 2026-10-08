@@ -1,9 +1,12 @@
-import { useRef, useState, type JSX, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type JSX, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { useRuntimeStore } from '../stores/runtimeStore'
 import { useGraphStore } from '../stores/graphStore'
 import { useNodeRunStatus, useWorkflowStore } from '../stores/workflowStore'
 import { useUiStore } from '../stores/uiStore'
+import { useSettingsStore } from '../stores/settingsStore'
+import { agentDisplayNameMap } from '../lib/agentNames'
+import { effectiveModel, providerIdOfAgent } from '../../../shared/providers'
 import { deleteNodeWithConfirm } from '../lib/nodeOps'
 import { NodeStatusBadge } from './NodeStatusBadge'
 import { RunNodeChip } from '../components/Workflow/RunNodeChip'
@@ -13,6 +16,43 @@ import type { AgentFlowNode } from '../stores/graphStore'
 
 /** 节点悬停多久后才弹数据探针 —— 扫过画布不算悬停 */
 const PROBE_HOVER_MS = 400
+
+/**
+ * 画布节点卡片上的「AI 徽标」:显示这个节点自己用的 agent 名 + 生效模型。
+ *
+ * 只订阅字符串(agentId / model),不走 Object.is 陷阱;agents 显示名走
+ * 模块级缓存(agentNames.ts),设置里的默认模型走 useSettingsStore ——
+ * 三者都是轻订阅,节点多了也不会因此拖慢 React Flow 渲染。
+ */
+function NodeAgentChip({ nodeId }: { nodeId: string }): JSX.Element | null {
+  const agentId = useGraphStore((s) => s.nodes.find((n) => n.id === nodeId)?.data.agentId)
+  const nodeModel = useGraphStore((s) => s.nodes.find((n) => n.id === nodeId)?.data.model)
+  const agentProviders = useSettingsStore((s) => s.payload?.current?.agent?.providers)
+  const [names, setNames] = useState<Record<string, string> | null>(null)
+  useEffect(() => {
+    void agentDisplayNameMap().then(setNames)
+  }, [])
+
+  const label = useMemo(() => {
+    if (!agentId) return null
+    const pid = providerIdOfAgent(agentId)
+    const def = pid ? (agentProviders?.[pid]?.defaultModel ?? '') : ''
+    const m = effectiveModel(agentId, nodeModel, def)
+    const aname = names?.[agentId] ?? agentId
+    return m ? `${aname} · ${m}` : aname
+  }, [agentId, nodeModel, agentProviders, names])
+
+  if (!label) return null
+  return (
+    <span
+      className="node-agent-chip"
+      title={`这个节点用的 AI 与模型:${label}\n(在节点配置里可单独更换)`}
+    >
+      <Icon name="terminal" size={10} />
+      {label}
+    </span>
+  )
+}
 
 /**
  * 四种类型节点(project / feature / merge / output)共用的外壳。
@@ -286,6 +326,8 @@ export function NodeShell({
       </header>
 
       <div className="agent-node-meta">
+        {/* 每个节点自己的 AI 徽标:agent 名 + 生效模型(节点配置可单独换) */}
+        <NodeAgentChip nodeId={id} />
         {meta}
 
         {/* 单独跑这个节点(会自动带上游;输出节点则是"开始打包")。运行中禁用 —— 同节点不能跑两路 */}
