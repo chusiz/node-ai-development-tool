@@ -54,4 +54,17 @@ export const SETTING_DEFAULTS = {
      */
     providers: {},
   },
+  /**
+   * UI 相关设置(v0.6.6 起):界面语言 + 用户自定义快捷键。
+   *
+   * keymap 的 key = 快捷键动作 id(见 renderer/src/lib/keymap.ts 的 DEFAULT_KEYMAP),
+   * value = 用户改过的组合串(如 `Ctrl+Shift+Enter`)。缺项 = 用默认键位。
+   * 放这里而不是 localStorage:与其它设置一起备份、一起换电脑迁移。
+   */
+  ui: {
+    /** 界面语言:'en' = English(默认,方便海外查看) / 'zh' = 简体中文 */
+    language: 'en' as 'en' | 'zh',
+    /** 用户自定义快捷键。空对象 = 全部用默认键位 */
+    keymap: {},
+  },
 } as const

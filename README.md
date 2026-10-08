@@ -1,6 +1,6 @@
 # Node AI Development Tool
 
-> **The node-based AI development workbench — drag, drop, and ship.**
+> **Ship real software from a node graph.**
 > Turn "AI programming" into a visual canvas: from a one-line requirement to generated images, written code, reviewed & tested output, and a packaged `.exe` / web app / Android APK / Godot game — **all on one canvas**.
 
 [English](./README.md) · [简体中文](./README.zh-CN.md)
@@ -194,7 +194,7 @@ python scripts/txt2img.py \
 ## Packaging
 
 ```bash
-npm run dist         # builds the installer → dist/node-ai-development-tool-0.6.6-setup.exe
+npm run dist         # builds the installer → dist/node-ai-development-tool-0.6.7-setup.exe
 npm run icon         # regenerates the app icon
 ```
 
@@ -275,6 +275,7 @@ All contributions welcome: issues, bug fixes, new node types, docs. See [CONTRIB
 
 ## Changelog highlights
 
+- **v0.6.7 (2026-10-08):** fully English UI (switchable to Chinese in Settings), user-customizable keyboard shortcuts (22 actions, per-user remapping with conflict detection), Settings panel split into 4 tabs, duplicate node (Ctrl+D), workflow export/import (Ctrl+E / Ctrl+I).
 - **v0.6.6 (2026-10-08):** engineering node group (lint / git / deps / context / contract / cost / diff / deploy) + UI polish — E-key edge cutting, icon-only top bar, per-node AI/agent badge on every node card.
 - **v0.6.5:** feedback loop — Gate node + Auto-Fix + node-level error visualization + incremental execution.
 - **v0.6.4:** artifact preview in-app, security audit before packaging, MCP Server, Python node, lazy loading, governance docs.

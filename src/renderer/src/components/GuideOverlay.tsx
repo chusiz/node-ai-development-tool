@@ -15,29 +15,29 @@ interface GuideStep {
 
 const STEPS: GuideStep[] = [
   {
-    title: '1. 放一个项目节点',
-    body: '项目节点是整个工作流的「项目文件夹」权威来源。它决定所有产物写到哪里。',
-    do: '左侧节点面板 → 拖「项目」到画布 → 在右侧面板选一个文件夹。',
+    title: '1. Add a Project node',
+    body: 'The Project node is the authoritative source of the project folder for the whole workflow. It decides where every artifact is written.',
+    do: 'Node panel on the left → drag “Project” to the canvas → pick a folder in the right panel.',
   },
   {
-    title: '2. 接一个功能节点',
-    body: '功能节点是 AI 干活的节点:写代码、改代码都在这。串行模式会把上游成果一起交给 AI。',
-    do: '把「功能」节点连到项目节点下游,填一句要做什么。',
+    title: '2. Connect a Feature node',
+    body: 'Feature nodes are where the AI works: writing code and editing code happen here. Serial mode hands upstream results to the AI.',
+    do: 'Connect a “Feature” node downstream of the Project node and type what you want it to do.',
   },
   {
-    title: '3. 加质量闸门(可选但推荐)',
-    body: '测试节点在项目目录里跑测试命令,不过就失败 —— 把「AI 改坏了」挡在打包之前。',
-    do: '连一个「测试」节点,填上测试命令(如 npm test)。',
+    title: '3. Add a quality gate (optional but recommended)',
+    body: 'The Test node runs test commands in the project directory and fails the run if they don’t pass — stopping “the AI broke it” before packaging.',
+    do: 'Connect a “Test” node and fill in the test command (e.g. npm test).',
   },
   {
-    title: '4. 接输出节点',
-    body: '输出节点把项目打包成可分发产物:Windows 应用(exe)、Web 应用、游戏包。打包前自动做安全审计。',
-    do: '连「输出」节点 → 选打包目标 → 点「运行」。',
+    title: '4. Connect an Output node',
+    body: 'The Output node packages the project into distributable artifacts: Windows apps (exe), Web apps, game bundles. Security audit runs before packaging.',
+    do: 'Connect the “Output” node → choose the packaging target → click “Run”.',
   },
   {
-    title: '5. 看产物与预览',
-    body: '跑完在输出节点上能看到产物;面板里的「预览产物」按钮能直接打开 exe / 网页,不用去文件夹找。',
-    do: '运行结束后点「预览产物」。出错时节点上会出现「送修」按钮,一键建修复节点。',
+    title: '5. See artifacts & preview',
+    body: 'After the run you can see artifacts on the Output node; the “Preview artifact” button in the panel opens the exe / webpage directly, no folder digging.',
+    do: 'After the run ends, click “Preview artifact”. On error, a “Fix” button appears on the node to create a repair node in one click.',
   },
 ]
 
@@ -48,8 +48,8 @@ export function GuideOverlay(): JSX.Element | null {
     return (
       <button
         className="guide-fab"
-        title="新手引导:5 分钟做出第一个应用"
-        aria-label="新手引导"
+        title="5-minute guided tour to your first app"
+        aria-label="Guided tour"
         onClick={() => {
           setStep(0)
           setOpen(true)
@@ -65,9 +65,9 @@ export function GuideOverlay(): JSX.Element | null {
       <div className="guide-card" onClick={(e) => e.stopPropagation()}>
         <div className="guide-head">
           <span className="guide-title">
-            <Icon name="logo" size={14} /> 新手引导
+            <Icon name="logo" size={14} /> Guided tour
           </span>
-          <button className="guide-close" aria-label="关闭引导" onClick={() => setOpen(false)}>
+          <button className="guide-close" aria-label="Close tour" onClick={() => setOpen(false)}>
             ×
           </button>
         </div>
@@ -84,12 +84,12 @@ export function GuideOverlay(): JSX.Element | null {
           </span>
           <span className="guide-nav">
             <button disabled={step === 0} onClick={() => setStep(step - 1)}>
-              上一步
+              Back
             </button>
             {step < STEPS.length - 1 ? (
-              <button onClick={() => setStep(step + 1)}>下一步</button>
+              <button onClick={() => setStep(step + 1)}>Next</button>
             ) : (
-              <button onClick={() => setOpen(false)}>开始使用</button>
+              <button onClick={() => setOpen(false)}>Start</button>
             )}
           </span>
         </div>

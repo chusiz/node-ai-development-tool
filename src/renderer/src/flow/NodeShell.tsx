@@ -6,6 +6,7 @@ import { useNodeRunStatus, useWorkflowStore } from '../stores/workflowStore'
 import { useUiStore } from '../stores/uiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { agentDisplayNameMap } from '../lib/agentNames'
+import { t, badgeText } from '../lib/i18n'
 import { effectiveModel, providerIdOfAgent } from '../../../shared/providers'
 import { deleteNodeWithConfirm } from '../lib/nodeOps'
 import { NodeStatusBadge } from './NodeStatusBadge'
@@ -46,7 +47,7 @@ function NodeAgentChip({ nodeId }: { nodeId: string }): JSX.Element | null {
   return (
     <span
       className="node-agent-chip"
-      title={`这个节点用的 AI 与模型:${label}\n(在节点配置里可单独更换)`}
+      title={t('node.agentChipTitle', undefined, { label })}
     >
       <Icon name="terminal" size={10} />
       {label}
@@ -81,7 +82,7 @@ export function useNodeLastLine(nodeId: string): string | null {
     if (!items || items.length === 0) return null
     for (let i = items.length - 1; i >= 0; i--) {
       const rec = items[i].rec
-      if (rec.t === 'user') return `你:${rec.text.split('\n')[0]}`
+      if (rec.t === 'user') return `${t('node.youPrefix')}:${rec.text.split('\n')[0]}`
       if (rec.t === 'notice') return rec.text.split('\n')[0]
       if (rec.t === 'event') {
         const ev = rec.ev
@@ -174,9 +175,19 @@ export function NodeShell({
    */
   const title = useGraphStore((s) => s.nodes.find((n) => n.id === id)?.data.title ?? id)
 
-  // 双击标题就地改名
+  // 双击标题就地改名;F2 快捷键(rename-node)通过 uiStore.renameRequestId 触发同一入口
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+
+  const renameRequestId = useUiStore((s) => s.renameRequestId)
+  useEffect(() => {
+    if (renameRequestId === id) {
+      setDraft(title)
+      setEditing(true)
+      // 一次性消费:这次请求已经落到本节点,清掉以免别的节点误读
+      useUiStore.getState().requestRename(null)
+    }
+  }, [renameRequestId, id, title])
 
   const commitRename = (): void => {
     setEditing(false)
@@ -250,9 +261,9 @@ export function NodeShell({
 
       <header className="agent-node-head">
         {badge && (
-          <span className={`node-kind-badge ${badge.cls}`} title={badge.title ?? badge.text}>
+          <span className={`node-kind-badge ${badge.cls}`} title={badge.title ?? badgeText(badge.text)}>
             <NodeIcon name={badge.icon} />
-            {badge.text}
+            {badgeText(badge.text)}
           </span>
         )}
         {/*
@@ -283,7 +294,7 @@ export function NodeShell({
         ) : (
           <span
             className="agent-node-title"
-            title={`${title}\n(双击改名)`}
+            title={`${title}\n(${t('node.renameTitle')})`}
             onDoubleClick={(e) => {
               e.stopPropagation()
               setDraft(title)
@@ -299,11 +310,11 @@ export function NodeShell({
         {status === 'failed' && lastError ? (
           <button
             className="mini node-fix"
-            title={`一键送修:${lastError.slice(0, 80)}`}
-            aria-label="一键送修"
+            title={t('node.fixTitle', undefined, { e: lastError.slice(0, 80) })}
+            aria-label={t('node.fixTitle')}
             onClick={sendToFix}
           >
-            送修
+            {t('node.fix')}
           </button>
         ) : null}
         {/*
@@ -314,8 +325,8 @@ export function NodeShell({
         */}
         <button
           className="node-del"
-          title="删除这个节点"
-          aria-label="删除这个节点"
+          title={t('node.deleteTitle')}
+          aria-label={t('node.deleteTitle')}
           onClick={(e) => {
             e.stopPropagation()
             void deleteNodeWithConfirm(id)
@@ -334,8 +345,8 @@ export function NodeShell({
         <button
           className="mini node-run"
           disabled={runBusy}
-          title="只跑这个节点(连同它的上游)"
-          aria-label="只跑这个节点"
+          title={t('node.runTitle')}
+          aria-label={t('node.runTitle')}
           onClick={(e) => {
             // 不阻止的话点按钮会顺带选中节点,Inspector 突然跳走
             e.stopPropagation()
@@ -348,7 +359,7 @@ export function NodeShell({
 
       {/* 上游提示。project 永远没有上游,传 null 即可 */}
       {(upstream ?? upstreamKey) && (
-        <div className="agent-node-up" title={`上游:${upstream ?? upstreamKey}`}>
+        <div className="agent-node-up" title={t('node.upstreamTitle', undefined, { n: upstream ?? upstreamKey })}>
           ← {upstream ?? upstreamKey}
         </div>
       )}
@@ -357,7 +368,7 @@ export function NodeShell({
       {extra}
 
       <div className={`agent-node-line ${line ?? lastLine ? '' : 'empty'}`}>
-        {line ?? lastLine ?? '还没有对话'}
+        {line ?? lastLine ?? t('node.noChat')}
       </div>
 
       {/* 下游出线。output 没有(它是终点) */}

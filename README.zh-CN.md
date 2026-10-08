@@ -194,7 +194,7 @@ python scripts/txt2img.py \
 ## 打包
 
 ```bash
-npm run dist         # 打包安装程序 → dist/node-ai-development-tool-0.6.6-setup.exe
+npm run dist         # 打包安装程序 → dist/node-ai-development-tool-0.6.7-setup.exe
 npm run icon         # 重新生成应用图标
 ```
 
@@ -275,6 +275,7 @@ docs/
 
 ## 更新要点
 
+- **v0.6.7(2026-10-08):** 界面全面英文化(可在设置切中文)、快捷键用户自定义(22 个动作,冲突检测)、设置面板分 4 类页签、复制节点(Ctrl+D)、工作流导出/导入(Ctrl+E / Ctrl+I)。
 - **v0.6.6(2026-10-08):** 工程化节点群(lint / git / deps / context / contract / cost / diff / deploy)+ UI 收尾 —— E 键剪断连线、顶栏图标化、每张节点卡片显示自己的 AI/agent 徽标。
 - **v0.6.5:** 反馈闭环 —— 闸门节点 + 自动修复 + 节点级错误可视化 + 增量执行。
 - **v0.6.4:** 应用内产物预览、打包前安全审计、MCP Server、Python 节点、启动懒加载、治理文档。

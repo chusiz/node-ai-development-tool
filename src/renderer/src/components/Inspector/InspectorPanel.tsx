@@ -5,6 +5,7 @@ import { useUiStore } from '../../stores/uiStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useNodeActions } from '../../hooks/useNodeActions'
 import { agentDisplayNameMap } from '../../lib/agentNames'
+import { t } from '../../lib/i18n'
 import { effectiveModel, providerIdOfAgent } from '../../../../shared/providers'
 import { NodeConfigPanel } from '../NodeConfig/NodeConfigPanel'
 import { Composer } from './Composer'
@@ -88,11 +89,11 @@ export function InspectorPanel(): JSX.Element {
           <div className="big">
             <Icon name="logo" size={30} />
           </div>
-          <div>还没有选中节点</div>
+          <div>{t('inspector.noSelection')}</div>
           <div className="sub">
-            点画布上的任意一个节点,在下面的输入框里跟它说话
+            {t('inspector.noSelectionSub')}
             <br />
-            要让它改你的项目,再去「节点配置」里选项目文件夹
+            {t('inspector.noSelectionSub2')}
           </div>
         </div>
       </aside>
@@ -111,15 +112,16 @@ export function InspectorPanel(): JSX.Element {
         <button
           onClick={() => void actions.newSession()}
           disabled={running}
-          title="清空这个节点的会话与磁盘日志,下一句话会是全新会话"
+          title={t('inspector.newSessionTitle')}
         >
-          新会话
+          {t('inspector.newSession')}
         </button>
       </header>
 
       <div className="inspector-sub">
         <span className="badge">
-          {turns} 轮{turns > 0 ? ` · 续用同一会话` : ''}
+          {turns} {t('inspector.rounds')}
+          {turns > 0 ? ` · ${t('inspector.sameSession')}` : ''}
         </span>
         {(() => {
           /* 当前节点实际用的 AI 与 agent:agent 名 + 生效模型(节点选的 > 全局默认) */
@@ -127,7 +129,7 @@ export function InspectorPanel(): JSX.Element {
           if (!aid) return null
           const aname = agentNames ? (agentNames[aid] ?? aid) : aid
           return (
-            <span className="badge node-agent" title="这个节点用的 AI 与模型(可在节点配置里单独更换)">
+            <span className="badge node-agent" title={t('inspector.agentTitle')}>
               {aname}
               {effectiveForNode ? ` · ${effectiveForNode}` : ''}
             </span>
@@ -135,17 +137,17 @@ export function InspectorPanel(): JSX.Element {
         })()}
         {diagCount > 0 && (
           <button className={showDiag ? 'primary mini' : 'mini'} onClick={toggleDiag}>
-            诊断 {diagCount}
+            {t('inspector.diagnosis')} {diagCount}
           </button>
         )}
       </div>
 
       <nav className="tabs">
         <button className={tab === 'chat' ? 'active' : ''} onClick={() => setTab('chat')}>
-          对话
+          {t('inspector.chatTab')}
         </button>
         <button className={tab === 'config' ? 'active' : ''} onClick={() => setTab('config')}>
-          节点配置
+          {t('inspector.configTab')}
         </button>
       </nav>
 

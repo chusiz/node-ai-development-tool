@@ -121,18 +121,27 @@ export const AgentSettingsSchema = z.object({
     .catch({ ...D.agent.providers }),
 })
 
+/** UI 相关设置:界面语言 + 用户自定义快捷键(见 defaults.ts ui 段注释) */
+export const UiSettingsSchema = z.object({
+  language: z.enum(['en', 'zh']).catch(D.ui.language),
+  /** actionId → 用户改过的组合串;缺项 = 用默认键位 */
+  keymap: z.record(z.string().max(64), z.string().max(128)).catch({ ...D.ui.keymap }),
+})
+
 export const SettingsSchema = z.object({
   version: z.literal(1).catch(1),
   memory: MemorySettingsSchema,
   limits: LimitsSchema,
   workflow: WorkflowSchema,
   agent: AgentSettingsSchema,
+  ui: UiSettingsSchema,
 })
 
 export type MemorySettings = z.infer<typeof MemorySettingsSchema>
 export type LimitSettings = z.infer<typeof LimitsSchema>
 export type WorkflowSettings = z.infer<typeof WorkflowSchema>
 export type AgentSettings = z.infer<typeof AgentSettingsSchema>
+export type UiSettings = z.infer<typeof UiSettingsSchema>
 export type Settings = z.infer<typeof SettingsSchema>
 
 /** 唯一默认值来源。与 schema 里的 .catch 同源(SETTING_DEFAULTS),不会漂移 */
@@ -142,6 +151,7 @@ export const DEFAULT_SETTINGS: Settings = {
   limits: { ...D.limits },
   workflow: { ...D.workflow },
   agent: { ...D.agent },
+  ui: { ...D.ui, keymap: { ...D.ui.keymap } },
 }
 
 /** 逐段解析。整段不是对象(或整体被破坏)就回退该段默认值 —— 其余段不受牵连 */
@@ -162,6 +172,7 @@ export function parseSettings(raw: unknown): Settings {
     limits: section(LimitsSchema, o.limits),
     workflow: section(WorkflowSchema, o.workflow),
     agent: section(AgentSettingsSchema, o.agent),
+    ui: section(UiSettingsSchema, o.ui),
   }
 }
 

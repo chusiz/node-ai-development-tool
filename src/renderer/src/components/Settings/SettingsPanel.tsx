@@ -1,23 +1,34 @@
 import { useEffect, useState, type JSX } from 'react'
 import type { LimitSettings, Settings, WorkflowSettings } from '../../types'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { t } from '../../lib/i18n'
 import { AppEnvSection } from './AppEnvSection'
 import { PerformanceSection } from './PerformanceSection'
 import { ProviderSection } from './ProviderSection'
+import { UiSection } from './UiSection'
 
 /** 上限类字段的元信息。与 schema 的区间保持一致(越界值主进程会夹回去) */
 const LIMIT_FIELDS: { key: keyof LimitSettings; label: string; hint: string }[] = [
-  { key: 'maxItemsPerNode', label: '每节点消息上限', hint: '超出后从头部折叠,并提示「已折叠 N 条」' },
-  { key: 'maxToolResultChars', label: '工具结果内联上限 (字符)', hint: '超出部分落到磁盘,展开时按需取回' },
-  { key: 'maxThinkingChars', label: '思考内联上限 (字符)', hint: '' },
-  { key: 'maxResultChars', label: '本轮结果上限 (字符)', hint: '' },
-  { key: 'stderrTailLines', label: 'stderr 保留行数', hint: '只做诊断,不进消息流' },
-  { key: 'diagRingSize', label: '诊断环形缓冲条数', hint: '未识别事件(raw)的保留量' },
+  { key: 'maxItemsPerNode', label: t('settings.limits.maxItemsPerNode'), hint: t('settings.limits.maxItemsPerNode.hint') },
+  { key: 'maxToolResultChars', label: t('settings.limits.maxToolResultChars'), hint: t('settings.limits.maxToolResultChars.hint') },
+  { key: 'maxThinkingChars', label: t('settings.limits.maxThinkingChars'), hint: '' },
+  { key: 'maxResultChars', label: t('settings.limits.maxResultChars'), hint: '' },
+  { key: 'stderrTailLines', label: t('settings.limits.stderrTailLines'), hint: t('settings.limits.stderrTailLines.hint') },
+  { key: 'diagRingSize', label: t('settings.limits.diagRingSize'), hint: t('settings.limits.diagRingSize.hint') },
 ]
 
 const WORKFLOW_FIELDS: { key: keyof WorkflowSettings; label: string; hint: string }[] = [
-  { key: 'maxParallel', label: '并发节点上限 (1–4)', hint: '16GB 内存 + API 限流下的保守值' },
-  { key: 'inlineLimitBytes', label: '上游产出内联上限 (字节)', hint: '超出改为向下游注入文件路径' },
+  { key: 'maxParallel', label: t('settings.workflow.maxParallel'), hint: t('settings.workflow.maxParallel.hint') },
+  { key: 'inlineLimitBytes', label: t('settings.workflow.inlineLimitBytes'), hint: t('settings.workflow.inlineLimitBytes.hint') },
+]
+
+/** 设置分类页签(v0.6.6 起分页展示,不再一页堆到底) */
+export type SettingsTab = 'perf' | 'model' | 'ui' | 'adv'
+const SETTINGS_TABS: { id: SettingsTab }[] = [
+  { id: 'perf' },
+  { id: 'model' },
+  { id: 'ui' },
+  { id: 'adv' },
 ]
 
 export function SettingsPanel({ onClose }: { onClose: () => void }): JSX.Element {
@@ -29,6 +40,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): JSX.Element
 
   const [draft, setDraft] = useState<Settings | null>(null)
   const [busy, setBusy] = useState(false)
+  /**
+   * 设置分类页签(v0.6.6):性能 / 模型与 Agent / 界面与快捷键 / 高级。
+   * 旧版一页全堆,找个选项要翻整条抽屉;分页后每个分类一目了然。
+   */
+  const [tab, setTab] = useState<SettingsTab>('perf')
 
   useEffect(() => {
     void load()
@@ -64,88 +80,115 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): JSX.Element
     <div className="overlay" onClick={onClose}>
       <aside className="drawer" onClick={(e) => e.stopPropagation()}>
         <header className="drawer-head">
-          <h2>设置</h2>
+          <h2>{t('settings.title')}</h2>
           <span className="spacer" />
-          <button onClick={onClose}>关闭</button>
+          <button onClick={onClose}>{t('settings.close')}</button>
         </header>
 
         <div className="drawer-body">
           {error && <div className="errbox">{error}</div>}
           {!draft || !payload ? (
-            <div className="note">读取设置中…</div>
+            <div className="note">{t('settings.loading')}</div>
           ) : (
             <>
               {needRestart.length > 0 && (
                 <div className="restartbar">
                   <div>
-                    已保存,但这些改动要<strong>重启</strong>才生效:
-                    <code>{needRestart.join(', ')}</code>
+                    {t('settings.restartNote', undefined, { items: needRestart.join(', ') })}
                   </div>
                   <button className="primary" onClick={() => void run(relaunch)} disabled={busy}>
-                    立即重启
+                    {t('settings.restartNow')}
                   </button>
                 </div>
               )}
 
-              <PerformanceSection
-                value={draft.memory}
-                onChange={(memory) => setDraft({ ...draft, memory })}
-              />
+              {/* 分类页签:一个 tab 一段设置,不再一页堆到底 */}
+              <div className="drawer-tabs" role="tablist">
+                {SETTINGS_TABS.map(({ id }) => (
+                  <button
+                    key={id}
+                    role="tab"
+                    aria-selected={tab === id}
+                    className={tab === id ? 'dtab on' : 'dtab'}
+                    onClick={() => setTab(id)}
+                  >
+                    {t(`settings.tab.${id}`)}
+                  </button>
+                ))}
+              </div>
 
-              <AppEnvSection
-                value={draft.agent}
-                onChange={(agent) => setDraft({ ...draft, agent })}
-              />
+              {tab === 'perf' && (
+                <PerformanceSection
+                  value={draft.memory}
+                  onChange={(memory) => setDraft({ ...draft, memory })}
+                />
+              )}
 
-              <ProviderSection
-                value={draft.agent}
-                onChange={(agent) => setDraft({ ...draft, agent })}
-              />
+              {tab === 'model' && (
+                <>
+                  <AppEnvSection
+                    value={draft.agent}
+                    onChange={(agent) => setDraft({ ...draft, agent })}
+                  />
+                  <ProviderSection
+                    value={draft.agent}
+                    onChange={(agent) => setDraft({ ...draft, agent })}
+                  />
+                </>
+              )}
 
-              <h3>消息列表封顶</h3>
-              <div className="note">这些是渲染进程侧的裁剪,保存即生效,不需要重启。</div>
-              {LIMIT_FIELDS.map((f) => (
-                <div className="field inline" key={f.key}>
-                  <label className="flabel">
-                    <input
-                      className="fnum"
-                      type="number"
-                      min={0}
-                      value={draft.limits[f.key]}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          limits: { ...draft.limits, [f.key]: Number(e.target.value) },
-                        })
-                      }
-                    />
-                    <span>{f.label}</span>
-                  </label>
-                  {f.hint && <div className="fhint">{f.hint}</div>}
-                </div>
-              ))}
+              {tab === 'ui' && (
+                <UiSection value={draft.ui} onChange={(ui) => setDraft({ ...draft, ui })} />
+              )}
 
-              <h3>工作流</h3>
-              {WORKFLOW_FIELDS.map((f) => (
-                <div className="field inline" key={f.key}>
-                  <label className="flabel">
-                    <input
-                      className="fnum"
-                      type="number"
-                      min={1}
-                      value={draft.workflow[f.key]}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          workflow: { ...draft.workflow, [f.key]: Number(e.target.value) },
-                        })
-                      }
-                    />
-                    <span>{f.label}</span>
-                  </label>
-                  {f.hint && <div className="fhint">{f.hint}</div>}
-                </div>
-              ))}
+              {tab === 'adv' && (
+                <>
+                  <h3>{t('settings.msgCap')}</h3>
+                  <div className="note">{t('settings.msgCapHint')}</div>
+                  {LIMIT_FIELDS.map((f) => (
+                    <div className="field inline" key={f.key}>
+                      <label className="flabel">
+                        <input
+                          className="fnum"
+                          type="number"
+                          min={0}
+                          value={draft.limits[f.key]}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              limits: { ...draft.limits, [f.key]: Number(e.target.value) },
+                            })
+                          }
+                        />
+                        <span>{f.label}</span>
+                      </label>
+                      {f.hint && <div className="fhint">{f.hint}</div>}
+                    </div>
+                  ))}
+
+                  <h3>{t('settings.workflowTitle')}</h3>
+                  {WORKFLOW_FIELDS.map((f) => (
+                    <div className="field inline" key={f.key}>
+                      <label className="flabel">
+                        <input
+                          className="fnum"
+                          type="number"
+                          min={1}
+                          value={draft.workflow[f.key]}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              workflow: { ...draft.workflow, [f.key]: Number(e.target.value) },
+                            })
+                          }
+                        />
+                        <span>{f.label}</span>
+                      </label>
+                      {f.hint && <div className="fhint">{f.hint}</div>}
+                    </div>
+                  ))}
+                </>
+              )}
             </>
           )}
         </div>
@@ -160,10 +203,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }): JSX.Element
               })
             }
           >
-            {dirty ? '保存' : '已保存'}
+            {dirty ? t('settings.save') : t('settings.saved')}
           </button>
           <button disabled={!dirty || busy || !payload} onClick={() => payload && setDraft(payload.current)}>
-            撤销
+            {t('settings.discard')}
           </button>
         </footer>
       </aside>

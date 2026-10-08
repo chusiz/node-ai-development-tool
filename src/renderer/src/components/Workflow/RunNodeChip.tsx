@@ -1,15 +1,16 @@
 import type { JSX } from 'react'
 import { useNodeRunStatus } from '../../stores/workflowStore'
 import type { RunNodeStatus } from '../../../../shared/workflow'
+import { t } from '../../lib/i18n'
 
-const LABEL: Record<RunNodeStatus, { cls: string; text: string }> = {
-  queued: { cls: '', text: '排队' },
-  waiting: { cls: '', text: '等待上游' },
-  running: { cls: 'warn', text: '运行中' },
-  done: { cls: 'ok', text: '完成' },
-  failed: { cls: 'err', text: '失败' },
-  skipped: { cls: '', text: '已跳过' },
-  cancelled: { cls: '', text: '已取消' },
+const LABEL: Record<RunNodeStatus, { cls: string; textKey: string }> = {
+  queued: { cls: '', textKey: 'run.node.queued' },
+  waiting: { cls: '', textKey: 'run.node.waiting' },
+  running: { cls: 'warn', textKey: 'run.node.running' },
+  done: { cls: 'ok', textKey: 'run.node.done' },
+  failed: { cls: 'err', textKey: 'run.node.failed' },
+  skipped: { cls: '', textKey: 'run.node.skipped' },
+  cancelled: { cls: '', textKey: 'run.node.cancelled' },
 }
 
 /**
@@ -27,10 +28,11 @@ export function RunNodeChip({ nodeId }: { nodeId: string }): JSX.Element | null 
   if (!status) return null
 
   const m = LABEL[status]
+  const text = t(m.textKey)
   return (
-    <span className={`badge run-chip ${m.cls}`} title={`本次运行:${m.text}`}>
+    <span className={`badge run-chip ${m.cls}`} title={`${t('run.statusPrefix')}:${text}`}>
       <span className={`dot ${status === 'running' ? 'pulse' : ''}`} />
-      {m.text}
+      {text}
     </span>
   )
 }

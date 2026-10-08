@@ -2,16 +2,15 @@ import { flushGraphSave, useGraphStore } from '../stores/graphStore'
 import { useUiStore } from '../stores/uiStore'
 import { useWorkflowStore } from '../stores/workflowStore'
 import { deleteNodeWithConfirm } from './nodeOps'
+import { comboMatches, getKeymap } from './keymap'
+import { exportWorkflowFile, importWorkflowFile } from './workflowIO'
 
 /**
- * 快捷键的**唯一事实源**。
+ * 快捷键的**行为表**(v0.6.6 起键位可自定义)。
  *
- * 为什么是一张表而不是一堆散落的 addEventListener:
- *   - 帮助浮层直接渲染这张表 —— 新增/改键只改一处,不会出现
- *     "界面上写 Ctrl+Enter、代码里认 Ctrl+Return"这种漂移;
- *   - 匹配与执行分离:match 只管"是不是这个键",run 只管"干嘛",
- *     免得两者混在 if/else 里,读的人要同时想两件事;
- *   - `global` 一个布尔就说清了"在输入框里打字时还算不算数"。
+ * 键位不再写在每条 def 里 —— 那是 `lib/keymap.ts` 的事(默认键位 + 用户在
+ * 设置页覆盖的键位,存 settings.ui.keymap)。这里只回答"命中之后干什么",
+ * 帮助浮层 / 设置面板 / 匹配引擎都从 keymap 读同一份当前键位,不会漂移。
  *
  * 约定(与 Composer 的 Enter 发送、NodeShell 的改名输入框对齐):
  *   凡是**输入框里打字会自然产生的字符**(Delete / Backspace / Enter / ?),
@@ -19,21 +18,18 @@ import { deleteNodeWithConfirm } from './nodeOps'
  *   凡是**带修饰键的组合**(Ctrl/Cmd + …)一律 global:true,它们是命令,不是文本。
  */
 
-export type ShortcutGroup = '运行' | '编辑' | '视图' | '导航'
+export type ShortcutGroup = 'run' | 'edit' | 'view' | 'nav'
 
 export interface ShortcutDef {
-  /** 稳定标识,帮助浮层做 key,e2e 想断言也能按它找 */
+  /** 稳定标识:keymap 的 key、帮助浮层的 key、e2e 想断言也能按它找 */
   id: string
   group: ShortcutGroup
-  /** 展示用的按键片段。最后一片是"主键",帮助浮层会加重它 */
-  keys: string[]
-  label: string
-  /** 补充说明(可为空) */
-  hint?: string
+  /** i18n key:label 与 hint 见 lib/i18n.ts 的 shortcut.<id> / shortcut.<id>.hint */
+  labelKey: string
+  hintKey?: string
   /** true = 焦点在任何输入框里时仍然生效 */
   global?: boolean
-  match(e: KeyboardEvent): boolean
-  run(): void
+  run(e: KeyboardEvent): void
 }
 
 /** Ctrl 与 Cmd 视为同一个修饰键 —— 两端各用各的习惯,不必为此写两份表 */
@@ -88,12 +84,10 @@ export const SHORTCUTS: ShortcutDef[] = [
   /* ---------------- 运行 ---------------- */
   {
     id: 'run-all',
-    group: '运行',
-    keys: ['Ctrl', 'Enter'],
-    label: '跑完整张图',
-    hint: '按连线顺序,与运行条的「▶ 跑全部」等价',
+    group: 'run',
+    labelKey: 'shortcut.run-all',
+    hintKey: 'shortcut.run-all.hint',
     global: true,
-    match: (e) => mod(e) && e.key === 'Enter' && !e.shiftKey,
     run: () => {
       const st = useWorkflowStore.getState()
       if (!canStartRun() || useGraphStore.getState().nodes.length === 0) return
@@ -102,12 +96,10 @@ export const SHORTCUTS: ShortcutDef[] = [
   },
   {
     id: 'run-selected',
-    group: '运行',
-    keys: ['Ctrl', 'Shift', 'Enter'],
-    label: '只跑选中节点',
-    hint: '连同它的上游一起跑',
+    group: 'run',
+    labelKey: 'shortcut.run-selected',
+    hintKey: 'shortcut.run-selected.hint',
     global: true,
-    match: (e) => mod(e) && e.shiftKey && e.key === 'Enter',
     run: () => {
       const st = useWorkflowStore.getState()
       const target = useUiStore.getState().selectedNodeId
@@ -117,11 +109,9 @@ export const SHORTCUTS: ShortcutDef[] = [
   },
   {
     id: 'cancel-run',
-    group: '运行',
-    keys: ['Ctrl', 'Shift', 'C'],
-    label: '取消当前运行',
+    group: 'run',
+    labelKey: 'shortcut.cancel-run',
     global: true,
-    match: (e) => mod(e) && e.shiftKey && lc(e) === 'c',
     run: () => {
       const st = useWorkflowStore.getState()
       const run = st.activeRunId ? st.runs[st.activeRunId] : null
@@ -133,41 +123,33 @@ export const SHORTCUTS: ShortcutDef[] = [
   /* ---------------- 编辑 ---------------- */
   {
     id: 'save',
-    group: '编辑',
-    keys: ['Ctrl', 'S'],
-    label: '立即保存画布',
-    hint: '平时是 500ms 自动存盘,这个是"现在就写"',
+    group: 'edit',
+    labelKey: 'shortcut.save',
+    hintKey: 'shortcut.save.hint',
     global: true,
-    match: (e) => mod(e) && lc(e) === 's',
     run: () => void flushGraphSave(),
   },
   {
     id: 'undo',
-    group: '编辑',
-    keys: ['Ctrl', 'Z'],
-    label: '撤销',
-    hint: '加删节点 / 连线 / 拖动 / 改配置都可回退,最多 50 步',
+    group: 'edit',
+    labelKey: 'shortcut.undo',
+    hintKey: 'shortcut.undo.hint',
     global: true,
-    match: (e) => mod(e) && !e.shiftKey && lc(e) === 'z',
     run: () => useGraphStore.getState().undo(),
   },
   {
     id: 'redo',
-    group: '编辑',
-    keys: ['Ctrl', 'Shift', 'Z'],
-    label: '重做',
-    hint: '把刚撤销的那一步再做回来',
+    group: 'edit',
+    labelKey: 'shortcut.redo',
+    hintKey: 'shortcut.redo.hint',
     global: true,
-    match: (e) => mod(e) && e.shiftKey && lc(e) === 'z',
     run: () => useGraphStore.getState().redo(),
   },
   {
     id: 'delete-node',
-    group: '编辑',
-    keys: ['Delete'],
-    label: '删除选中的节点 / 切断选中的连线',
-    hint: '连线直接断;节点会问一次,运行中会先中断',
-    match: (e) => e.key === 'Delete' || e.key === 'Backspace',
+    group: 'edit',
+    labelKey: 'shortcut.delete-node',
+    hintKey: 'shortcut.delete-node.hint',
     run: () => {
       const { selectedEdgeId, selectedNodeId } = useUiStore.getState()
       /*
@@ -183,12 +165,10 @@ export const SHORTCUTS: ShortcutDef[] = [
   },
   {
     id: 'add-node',
-    group: '编辑',
-    keys: ['Ctrl', 'K'],
-    label: '添加节点',
-    hint: '菜单里 ↑↓ 选,Enter 确认,数字键直选',
+    group: 'edit',
+    labelKey: 'shortcut.add-node',
+    hintKey: 'shortcut.add-node.hint',
     global: true,
-    match: (e) => mod(e) && lc(e) === 'k',
     run: () => {
       const ui = useUiStore.getState()
       ui.setAddMenuOpen(!ui.addMenuOpen)
@@ -196,55 +176,82 @@ export const SHORTCUTS: ShortcutDef[] = [
   },
   {
     id: 'focus-composer',
-    group: '编辑',
-    keys: ['Enter'],
-    label: '给选中节点说话',
-    hint: '把光标送进右栏输入框',
-    match: (e) => e.key === 'Enter' && !isActivatableTarget(e.target),
+    group: 'edit',
+    labelKey: 'shortcut.focus-composer',
+    hintKey: 'shortcut.focus-composer.hint',
     run: () => {
       const ta = document.querySelector<HTMLTextAreaElement>('.inspector .composer textarea')
       ta?.focus()
+    },
+  },
+  {
+    id: 'duplicate-node',
+    group: 'edit',
+    labelKey: 'shortcut.duplicate-node',
+    hintKey: 'shortcut.duplicate-node.hint',
+    global: true,
+    run: () => {
+      const id = useUiStore.getState().selectedNodeId
+      if (id) useGraphStore.getState().duplicateNode(id)
+    },
+  },
+  {
+    id: 'rename-node',
+    group: 'edit',
+    labelKey: 'shortcut.rename-node',
+    hintKey: 'shortcut.rename-node.hint',
+    global: true,
+    run: () => {
+      const ui = useUiStore.getState()
+      if (ui.selectedNodeId) ui.requestRename(ui.selectedNodeId)
     },
   },
 
   /* ---------------- 视图 ---------------- */
   {
     id: 'fit-view',
-    group: '视图',
-    keys: ['Ctrl', '0'],
-    label: '缩放到刚好装下',
+    group: 'view',
+    labelKey: 'shortcut.fit-view',
     global: true,
-    match: (e) => mod(e) && e.key === '0',
     run: () => canvasBridge()?.fitView(),
   },
   {
-    id: 'toggle-tab',
-    group: '视图',
-    keys: ['Ctrl', '1 / 2'],
-    label: '对话 / 节点配置',
-    hint: 'Ctrl+1 对话,Ctrl+2 节点配置',
+    id: 'chat-tab',
+    group: 'view',
+    labelKey: 'shortcut.chat-tab',
     global: true,
-    // Ctrl+1 与 Ctrl+2 是**同一行帮助**,所以合成一条 def;
-    // 具体按的是哪个键在 match 里记下(它紧接着就会被 run 读到)
-    match: (e) => {
-      if (!mod(e) || (e.key !== '1' && e.key !== '2')) return false
-      lastDigit = e.key
-      return true
-    },
     run: () => {
       const ui = useUiStore.getState()
-      if (!ui.selectedNodeId) return
-      ui.setInspectorTab(lastDigit === '1' ? 'chat' : 'config')
+      if (ui.selectedNodeId) ui.setInspectorTab('chat')
+    },
+  },
+  {
+    id: 'config-tab',
+    group: 'view',
+    labelKey: 'shortcut.config-tab',
+    global: true,
+    run: () => {
+      const ui = useUiStore.getState()
+      if (ui.selectedNodeId) ui.setInspectorTab('config')
+    },
+  },
+  {
+    id: 'toggle-workspace',
+    group: 'view',
+    labelKey: 'shortcut.toggle-workspace',
+    hintKey: 'shortcut.toggle-workspace.hint',
+    global: true,
+    run: () => {
+      const ui = useUiStore.getState()
+      ui.setWorkspace(ui.workspace === 'app' ? 'image' : 'app')
     },
   },
 
   /* ---------------- 导航 ---------------- */
   {
     id: 'shortcuts-help',
-    group: '导航',
-    keys: ['?'],
-    label: '打开/关闭这份快捷键表',
-    match: (e) => e.key === '?',
+    group: 'nav',
+    labelKey: 'shortcut.shortcuts-help',
     run: () => {
       const ui = useUiStore.getState()
       ui.setShowShortcuts(!ui.showShortcuts)
@@ -252,21 +259,51 @@ export const SHORTCUTS: ShortcutDef[] = [
   },
   {
     id: 'settings',
-    group: '导航',
-    keys: ['Ctrl', ','],
-    label: '打开设置',
+    group: 'nav',
+    labelKey: 'shortcut.settings',
     global: true,
-    match: (e) => mod(e) && e.key === ',',
     run: () => useUiStore.getState().setShowSettings(true),
   },
   {
-    id: 'escape',
-    group: '导航',
-    keys: ['Esc'],
-    label: '关闭浮层 / 回到画布',
-    hint: '逐层关:浮层 → 菜单 → 取消选中',
+    id: 'toggle-skills',
+    group: 'nav',
+    labelKey: 'shortcut.toggle-skills',
     global: true,
-    match: (e) => e.key === 'Escape',
+    run: () => {
+      const ui = useUiStore.getState()
+      ui.setShowSkills(!ui.showSkills)
+    },
+  },
+  {
+    id: 'export-workflow',
+    group: 'nav',
+    labelKey: 'shortcut.export-workflow',
+    global: true,
+    run: () => void exportWorkflowFile(),
+  },
+  {
+    id: 'import-workflow',
+    group: 'nav',
+    labelKey: 'shortcut.import-workflow',
+    global: true,
+    run: () => void importWorkflowFile(),
+  },
+  {
+    id: 'focus-project',
+    group: 'nav',
+    labelKey: 'shortcut.focus-project',
+    global: true,
+    run: () => {
+      const el = document.querySelector<HTMLElement>('.topbar select.proj-select, .topbar select')
+      el?.focus()
+    },
+  },
+  {
+    id: 'escape',
+    group: 'nav',
+    labelKey: 'shortcut.escape',
+    hintKey: 'shortcut.escape.hint',
+    global: true,
     run: () => {
       const ui = useUiStore.getState()
       if (ui.showShortcuts) return ui.setShowShortcuts(false)
@@ -279,13 +316,6 @@ export const SHORTCUTS: ShortcutDef[] = [
     },
   },
 ]
-
-/**
- * Ctrl+1 / Ctrl+2 共用一条 def **只是为了帮助浮层里它们能显示成一行**。
- * 具体按的是哪个键,由那条 def 的 match 在命中时写进这里,run 立刻读走 ——
- * 同一个事件循环内的一写一读,不存在竞态。
- */
-let lastDigit: '1' | '2' = '1'
 
 /* ------------------------------------------------------------------ */
 /* 画布动作桥接                                                        */
@@ -313,15 +343,21 @@ function canvasBridge(): CanvasBridge | null {
 /**
  * 跑一遍快捷键表。
  *
- * 返回是否命中 —— 命中即代表这一次按键已经被"业务"消费掉,
- * useShortcuts 会 preventDefault,免得同时触发浏览器/React Flow 的默认行为。
+ * 键位从 keymap(默认 + 用户自定义)读;返回是否命中 —— 命中即代表这一次
+ * 按键已经被"业务"消费掉,useShortcuts 会 preventDefault,免得同时触发
+ * 浏览器/React Flow 的默认行为。
  */
 export function dispatchShortcut(e: KeyboardEvent): boolean {
+  const km = getKeymap()
   for (const def of SHORTCUTS) {
     if (!def.global && isTypingTarget(e.target)) continue
-    if (!def.match(e)) continue
-    def.run()
+    const combos = km[def.id]
+    if (!combos || !combos.some((c) => comboMatches(e, c))) continue
+    def.run(e)
     return true
   }
   return false
 }
+
+// mod / lc 保留给扩展动作使用(如未来按修饰键状态分支),避免误删后编译报错
+export { mod, lc }

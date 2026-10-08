@@ -1,6 +1,6 @@
 {
   "name": "node-ai-development-tool",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "private": true,
   "description": "节点式 AI 软件/应用/游戏制作工作台:本地模型直出生图、交接节点、Electron exe 打包、视频理解",
   "productName": "Node AI Development Tool",

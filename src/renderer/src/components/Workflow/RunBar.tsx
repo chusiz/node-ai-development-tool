@@ -5,6 +5,8 @@ import { useUiStore } from '../../stores/uiStore'
 import { RunNodeChip } from './RunNodeChip'
 import { Icon } from '../Icons'
 import type { RunNodeState, RunStatus } from '../../../../shared/workflow'
+import { t } from '../../lib/i18n'
+import { getKeymap } from '../../lib/keymap'
 
 /**
  * 工作流的控制条。浮在画布上沿。
@@ -29,11 +31,11 @@ import type { RunNodeState, RunStatus } from '../../../../shared/workflow'
  * 失败原因放这里是同一类信息的自然延伸,不需要新开一处常驻 UI。
  */
 
-const SCOPE_LABEL: Record<RunStatus, { cls: string; text: string }> = {
-  running: { cls: 'warn', text: '运行中' },
-  done: { cls: 'ok', text: '全部完成' },
-  failed: { cls: 'err', text: '有失败' },
-  cancelled: { cls: '', text: '已取消' },
+const SCOPE_LABEL: Record<RunStatus, { cls: string }> = {
+  running: { cls: 'warn' },
+  done: { cls: 'ok' },
+  failed: { cls: 'err' },
+  cancelled: { cls: '' },
 }
 
 export function RunBar(): JSX.Element | null {
@@ -72,10 +74,14 @@ export function RunBar(): JSX.Element | null {
         // 第二次会因为"节点正在运行中"整片失败,看起来像坏了
         disabled={running || nodeCount === 0}
         onClick={() => void runAll()}
-        title={nodeCount === 0 ? '先加个节点' : '按连线顺序跑完整张图 (Ctrl+Enter)'}
+        title={
+          nodeCount === 0
+            ? t('run.runAllTitleEmpty')
+            : t('run.runAllTitle', undefined, { keys: (getKeymap()['run-all'] ?? ['Ctrl+Enter'])[0] })
+        }
       >
         <Icon name="play" size={12} />
-        跑全部
+        {t('run.runAll')}
       </button>
 
       <button
@@ -83,20 +89,20 @@ export function RunBar(): JSX.Element | null {
         onClick={() => {
           if (selectedNodeId) void useWorkflowStore.getState().runTargets([selectedNodeId])
         }}
-        title="只跑选中节点(连同它的上游)(Ctrl+Shift+Enter)"
+        title={t('run.runSelectedTitle', undefined, { keys: (getKeymap()['run-selected'] ?? ['Ctrl+Shift+Enter'])[0] })}
       >
         <Icon name="play" size={12} />
-        只跑选中
+        {t('run.runSelected')}
       </button>
 
       {tally && (
         <>
-          <span className={`badge ${SCOPE_LABEL[run!.status].cls}`}>{SCOPE_LABEL[run!.status].text}</span>
-          <span className="run-tally" title="完成 / 总数">
+          <span className={`badge ${SCOPE_LABEL[run!.status].cls}`}>{t(`run.status.${run!.status}`)}</span>
+          <span className="run-tally" title={t('run.tallyTitle')}>
             {tally.done}/{tally.total}
-            {tally.failed > 0 && <span className="err"> · 失败 {tally.failed}</span>}
-            {tally.skipped > 0 && <span> · 跳过 {tally.skipped}</span>}
-            {tally.waiting > 0 && <span> · 等待 {tally.waiting}</span>}
+            {tally.failed > 0 && <span className="err"> · {t('run.failedN', undefined, { n: String(tally.failed) })}</span>}
+            {tally.skipped > 0 && <span> · {t('run.skippedN', undefined, { n: String(tally.skipped) })}</span>}
+            {tally.waiting > 0 && <span> · {t('run.waitingN', undefined, { n: String(tally.waiting) })}</span>}
           </span>
         </>
       )}
@@ -104,18 +110,18 @@ export function RunBar(): JSX.Element | null {
       {running && (
         <button className="danger" onClick={() => void cancel(run!.runId)}>
           <Icon name="stop" size={11} />
-          取消
+          {t('run.cancel')}
         </button>
       )}
 
       <button className={open ? 'ghost on' : 'ghost'} onClick={() => setOpen((v) => !v)}>
         {input.trim() ? (
           <>
-            输入
+            {t('run.input')}
             <Icon name="dot" size={8} className="dirty-dot" />
           </>
         ) : (
-          '输入'
+          t('run.input')
         )}
       </button>
 
@@ -124,10 +130,10 @@ export function RunBar(): JSX.Element | null {
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={'给这次运行的一句话(可选)\n会作为 {{input}} 拼在每个源头节点的提示词后面'}
+            placeholder={t('run.inputPlaceholder')}
             rows={3}
           />
-          <div className="hint">只影响这次运行,不写进节点配置</div>
+          <div className="hint">{t('run.inputHint')}</div>
         </div>
       )}
 
@@ -139,10 +145,10 @@ export function RunBar(): JSX.Element | null {
         <button
           className={warnsOpen ? 'ghost on run-warns-toggle' : 'ghost run-warns-toggle'}
           onClick={() => setWarnsOpen((v) => !v)}
-          title="展开查看运行前检查提示"
+          title={t('run.checkTitle')}
         >
           <Icon name="alert" size={12} />
-          检查 {issues.length}
+          {t('run.check', undefined, { n: String(issues.length) })}
         </button>
       )}
 
@@ -174,7 +180,7 @@ export function RunBar(): JSX.Element | null {
           title={fails.map((f) => `${f.title}:${f.reason}`).join('\n')}
         >
           <Icon name="alert" size={12} />
-          失败原因 {fails.length}
+          {t('run.failReasons', undefined, { n: String(fails.length) })}
         </button>
       )}
 
@@ -192,40 +198,44 @@ export function RunBar(): JSX.Element | null {
 
       {error && (
         <div className="run-error">
-          <span className="err">发起失败:{error}</span>
+          <span className="err">{t('run.startFailed', undefined, { e: error })}</span>
           {cycle.length > 0 && (
             <span className="hint">
-              环上的节点:{cycle.map((id) => titleOf(id)).join(' → ')}
+              {t('run.cycleNodes')} {cycle.map((id) => titleOf(id)).join(' → ')}
             </span>
           )}
           <button className="mini" onClick={clearError}>
-            知道了
+            {t('run.gotIt')}
           </button>
         </div>
       )}
 
       {edgeCount === 0 && nodeCount > 1 && !running && (
-        <span className="hint-inline">
-          节点之间还没连线 —— 现在它们各跑各的,不会互相传递结果
-        </span>
+        <span className="hint-inline">{t('run.noEdgesHint')}</span>
       )}
 
       {/*
         键盘提示常驻在运行条最右。
         运行条在布局流里(不占画布像素),所以这条提示是"白捡"的可见度 ——
         快捷键最大的问题是没人知道它存在,而这里恰好是用户点「跑」时会看的地方。
+        键位从 keymap 读:用户改过之后这里跟着变。
       */}
       <span className="run-keys">
-        <span className="kbd">Ctrl</span>
-        <span className="sc-sep">+</span>
-        <span className="kbd">Enter</span>
-        <span className="run-keys-label">跑全部</span>
+        {(getKeymap()['run-all'] ?? ['Ctrl+Enter'])[0]
+          .split('+')
+          .map((part, i) => (
+            <span key={part} style={{ display: 'inline-flex', alignItems: 'center' }}>
+              {i > 0 && <span className="sc-sep">+</span>}
+              <span className="kbd">{part}</span>
+            </span>
+          ))}
+        <span className="run-keys-label">{t('run.runAll')}</span>
         <button
           className="linklike"
-          title="查看全部快捷键 (?)"
+          title={t('run.shortcutsTitle')}
           onClick={() => useUiStore.getState().setShowShortcuts(true)}
         >
-          快捷键
+          {t('run.shortcuts')}
         </button>
       </span>
     </div>

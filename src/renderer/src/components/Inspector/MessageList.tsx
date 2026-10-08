@@ -5,6 +5,7 @@ import { useUiStore } from '../../stores/uiStore'
 import type { Item } from '../../stores/types'
 import { MessageBubble } from './MessageBubble'
 import { Icon } from '../Icons'
+import { t } from '../../lib/i18n'
 
 /**
  * 单个节点的消息流。
@@ -37,7 +38,7 @@ export function MessageList({ nodeId, canvasId }: { nodeId: string; canvasId: st
     <>
       <div className="stream" ref={pin.ref} onScroll={pin.onScroll}>
         {trimmed > 0 && (
-          <div className="trimmed-note">已折叠更早的 {trimmed} 条(在磁盘里,后续版本可按需加载)</div>
+          <div className="trimmed-note">{t('inspector.trimmedNote', undefined, { n: String(trimmed) })}</div>
         )}
 
         {visible.length === 0 ? (
@@ -45,8 +46,8 @@ export function MessageList({ nodeId, canvasId }: { nodeId: string; canvasId: st
             <div className="big">
               <Icon name="logo" size={26} />
             </div>
-            <div>这个节点还没有对话</div>
-            <div className="sub">在下面输入一句话,它会用自己的会话跑</div>
+            <div>{t('inspector.empty')}</div>
+            <div className="sub">{t('inspector.emptySub')}</div>
           </div>
         ) : (
           visible.map((it) => <MessageBubble key={it.key} rec={it.rec} canvasId={canvasId} />)
@@ -58,7 +59,7 @@ export function MessageList({ nodeId, canvasId }: { nodeId: string; canvasId: st
       {/* 用户主动上翻后出现 —— 跟随被他打断了,给一个一键复位 */}
       {!pin.atBottom && visible.length > 0 && (
         <button className="jump-bottom" onClick={pin.scrollToBottom}>
-          ↓ 回到底部
+          ↓ {t('inspector.backToBottom')}
         </button>
       )}
     </>

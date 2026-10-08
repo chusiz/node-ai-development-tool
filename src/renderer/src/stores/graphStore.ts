@@ -35,6 +35,7 @@ import { HistoryStack } from '../../../shared/history'
 // graphIssuesFor = expandSubgraphs + validateGraph + 子图节点自身校验,与主进程同口径
 import { graphIssuesFor, type GraphIssue } from '../../../shared/workflow'
 import { unwrap } from '../lib/unwrap'
+import { useUiStore } from './uiStore'
 
 /**
  * 画布上的 React Flow 节点。data 与 shared 的 NodeConfig 同一形状;
@@ -107,6 +108,8 @@ interface GraphState {
 
   addNode(at?: { x: number; y: number }, kind?: NodeKind, preset?: Partial<NodeConfig>): string
   removeNode(id: string): void
+  /** 复制节点(Ctrl+D,见 lib/shortcuts.ts)。复制本体 + 出边,返回新节点 id;找不到返回 null */
+  duplicateNode(id: string): string | null
   /**
    * 切断一条连线。**只删边,不删节点**。
    *
@@ -403,6 +406,45 @@ export const useGraphStore = create<GraphState>((set, get) => {
       }))
       commitHistory(before)
       scheduleSave()
+    },
+
+    /**
+     * 复制选中节点(v0.6.6 快捷键 Ctrl+D)。
+     *
+     * 复制节点本体(数据深拷贝)与它的**出边**(出边接到新节点上),向右下偏移摆放;
+     * 入边不复制 —— 复制件是"从这里继续写"的独立起点,不该把旧上游再拉进来。
+     * 复制成功后选中新节点,方便马上改名 / 继续操作。
+     */
+    duplicateNode(id) {
+      const st = get()
+      const src = st.nodes.find((n) => n.id === id)
+      if (!src) return null
+      const nid = newCanvasNodeId()
+      const before = snapshot()
+      const off = 48
+      const newNode: AgentFlowNode = {
+        ...src,
+        id: nid,
+        position: { x: src.position.x + off, y: src.position.y + off },
+        selected: false,
+        data: {
+          // 运行态(runs / 对话历史)不复制 —— 复制件是"从这里继续写"的独立起点
+          ...src.data,
+          title: `${src.data.title} (copy)`,
+        },
+      }
+      const newEdges = st.edges
+        .filter((e) => e.source === id)
+        .map((e) => ({ id: `e-${nid}-${e.target}`, source: nid, target: e.target }))
+      set((s) => ({
+        nodes: [...s.nodes, newNode],
+        edges: [...s.edges, ...newEdges],
+      }))
+      commitHistory(before)
+      scheduleSave()
+      // 选中新节点:复制完第一件事大概率是改名
+      useUiStore.getState().select(nid)
+      return nid
     },
 
     removeEdge(id) {

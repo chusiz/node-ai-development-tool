@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type JSX, type MouseEvent } from 'react'
 import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react'
 import { useGraphStore } from '../stores/graphStore'
 import { useUiStore } from '../stores/uiStore'
+import { comboMatches, getKeymap } from '../lib/keymap'
 
 /**
  * 可切断的连线 —— **悬停 + 按 E 剪断**。
@@ -88,13 +89,15 @@ export function CuttableEdge({
   }
 
   /*
-   * E 键剪断:只在当前边被悬停时生效。
+   * 剪断键(默认 E,可在设置 → 快捷键里自定义):只在当前边被悬停时生效。
    * 悬停瞬间才挂监听,移开就撤 —— 不干扰全局快捷键表。
+   * 键位从 keymap 读:用户把剪断改成别的键,这里跟着变。
    */
   useEffect(() => {
     if (!hot) return
+    const combos = getKeymap()['cut-edge'] ?? ['E']
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key.toLowerCase() !== 'e') return
+      if (!combos.some((c) => comboMatches(e, c))) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       e.preventDefault()
@@ -111,7 +114,7 @@ export function CuttableEdge({
       onMouseLeave={leave}
       className={hot ? 'edge-hot' : undefined}
     >
-      {hot && <title>按 E 剪断连线</title>}
+      {hot && <title>{`Cut edge: ${(getKeymap()['cut-edge'] ?? ['E']).join(' / ')}`}</title>}
       <BaseEdge
         id={id}
         path={edgePath}

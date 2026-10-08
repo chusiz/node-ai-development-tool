@@ -1,5 +1,6 @@
 import { useState, type JSX } from 'react'
 import type { NodeEvent, PersistedRecord } from '../../types'
+import { t } from '../../lib/i18n'
 
 /**
  * 一条消息。
@@ -36,7 +37,7 @@ export function MessageBubble({
     return (
       <details className="rawline">
         <summary>
-          <span className="tag">诊断</span>
+          <span className="tag">{t('msg.diagTag')}</span>
           {rawLabel(rec.payload)}
         </summary>
         <pre className="code">{safeJson(rec.payload)}</pre>
@@ -60,7 +61,7 @@ function EventBubble({
     case 'init':
       return (
         <div className="bubble">
-          <div className="who">会话已建立</div>
+          <div className="who">{t('msg.sessionEstablished')}</div>
           <div className="result-bar">
             <span>sid: {ev.sessionId.slice(0, 8)}…</span>
             {ev.model && <span>model: {ev.model}</span>}
@@ -72,7 +73,7 @@ function EventBubble({
     case 'text':
       return (
         <div className="bubble">
-          <div className="who">claude</div>
+          <div className="who">assistant</div>
           <div className="txt">{ev.text}</div>
         </div>
       )
@@ -80,7 +81,7 @@ function EventBubble({
     case 'thinking':
       return (
         <div className="bubble thinking">
-          <div className="who">思考</div>
+          <div className="who">{t('msg.thinking')}</div>
           <div className="txt">{ev.text}</div>
         </div>
       )
@@ -88,7 +89,7 @@ function EventBubble({
     case 'tool_use':
       return (
         <div className="bubble tool">
-          <div className="who">调用工具 · {ev.name}</div>
+          <div className="who">{t('msg.toolUse', undefined, { name: ev.name })}</div>
           <pre className="code">{safeJson(ev.input)}</pre>
         </div>
       )
@@ -97,21 +98,22 @@ function EventBubble({
       return (
         <div className={`bubble tool-result ${ev.isError ? 'is-error' : ''}`}>
           <div className="who">
-            工具结果{ev.isError ? ' (错误)' : ''}
+            {t('msg.toolResult')}
+            {ev.isError ? ` (${t('msg.errorWord')})` : ''}
             {meta._truncated && <TruncNote meta={meta} canvasId={canvasId} />}
           </div>
-          <div className="txt">{ev.content || '(空)'}</div>
+          <div className="txt">{ev.content || t('msg.emptyWord')}</div>
         </div>
       )
 
     case 'result':
       return (
         <div className="bubble">
-          <div className="who">本轮结束</div>
+          <div className="who">{t('msg.roundEnd')}</div>
           <div className="result-bar">
             <span className={ev.isError ? 'badge err' : 'badge ok'}>
               <span className="dot" />
-              {ev.isError ? '异常' : '成功'}
+              {ev.isError ? t('msg.failed') : t('msg.ok')}
             </span>
             {ev.durationMs != null && <span>{(ev.durationMs / 1000).toFixed(1)}s</span>}
             {ev.costUsd != null && <span>${ev.costUsd.toFixed(5)}</span>}
@@ -122,7 +124,7 @@ function EventBubble({
     case 'error':
       return (
         <div className="bubble error">
-          <div className="who">错误</div>
+          <div className="who">{t('msg.error')}</div>
           <div className="txt">{ev.message}</div>
         </div>
       )
@@ -131,7 +133,7 @@ function EventBubble({
       return (
         <details className="rawline">
           <summary>
-            <span className="tag">诊断</span>
+            <span className="tag">{t('msg.diagTag')}</span>
             {rawLabel(ev.payload)}
           </summary>
           <pre className="code">{safeJson(ev.payload)}</pre>
@@ -163,15 +165,15 @@ function TruncNote({ meta, canvasId }: { meta: PersistedRecord; canvasId: string
   return (
     <span className="trunc">
       <span className="badge warn">
-        已折叠 {Math.round((meta._bytes ?? 0) / 1024)}KB
+        {t('msg.foldedKB', undefined, { kb: String(Math.round((meta._bytes ?? 0) / 1024)) })}
       </span>
       {full === null ? (
         <button className="mini" onClick={() => void load()} disabled={busy}>
-          {busy ? '读取中…' : '展开'}
+          {busy ? t('msg.loading') : t('msg.expand')}
         </button>
       ) : (
         <button className="mini" onClick={() => setFull(null)}>
-          收起
+          {t('msg.collapse')}
         </button>
       )}
       {full !== null && <pre className="code full">{full}</pre>}
@@ -193,7 +195,7 @@ function rawLabel(payload: unknown): string {
 function safeJson(v: unknown): string {
   try {
     const s = JSON.stringify(v, null, 2)
-    return s.length > 4000 ? s.slice(0, 4000) + '\n… (已截断)' : s
+    return s.length > 4000 ? s.slice(0, 4000) + `\n… (${t('msg.truncated')})` : s
   } catch {
     return String(v)
   }

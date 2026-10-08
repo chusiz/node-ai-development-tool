@@ -927,6 +927,37 @@ pre.code {
   margin-top: 0;
 }
 
+/* 设置面板分类页签(v0.6.6):一行胶囊,当前分类高亮 */
+.drawer-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dtab {
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+
+.dtab:hover {
+  color: var(--fg-1);
+  border-color: var(--fg-2);
+}
+
+.dtab.on {
+  background: var(--accent-dim, #2f4a75);
+  color: var(--fg-1);
+  border-color: transparent;
+}
+
 .drawer-foot {
   display: flex;
   gap: 8px;

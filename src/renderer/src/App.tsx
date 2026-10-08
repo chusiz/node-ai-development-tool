@@ -19,6 +19,7 @@ import { useRuntimeStore } from './stores/runtimeStore'
 import { useUiStore } from './stores/uiStore'
 import { unwrap } from './lib/unwrap'
 import { agentDisplayNameMap } from './lib/agentNames'
+import { t } from './lib/i18n'
 import { canvasIdFor, WORKSPACE_LABEL, type WorkspaceId } from '../../shared/nodeRegistry'
 import { effectiveModel, providerIdOfAgent } from '../../shared/providers'
 import type { DetectResult } from './types'
@@ -144,10 +145,10 @@ export default function App(): JSX.Element {
     ? agentNames?.[selectedNode.data.agentId ?? ''] ?? selectedNode.data.agentId ?? null
     : null
   const modelTitle = selectedNode
-    ? `节点「${selectedNode.data.title ?? selectedNode.id}」:${agentName ?? '默认 agent'} · ${shownModel ?? '默认模型'} — 每个节点可在节点配置里单独换 AI/agent`
+    ? `${t('topbar.modelTitle.node', undefined, { name: selectedNode.data.title ?? selectedNode.id, agent: agentName ?? t('topbar.modelTitle.defaultAgent'), model: shownModel ?? t('topbar.modelTitle.defaultModel') })}`
     : shownModel
-      ? `全局默认模型:${shownModel} — 点击设置(每个节点可单独配置自己的模型/agent)`
-      : '未配置默认模型 — 点击设置(支持火山方舟 / Gemini / 本地模型等)'
+      ? t('topbar.modelTitle.global', undefined, { model: shownModel })
+      : t('topbar.modelTitle.none')
 
   /*
    * 设置面板关掉之后重探一次。
@@ -192,7 +193,7 @@ export default function App(): JSX.Element {
         {/* 项目选择器:多项目并行 —— 每个项目有自己的生图 + 软件制作画布 */}
         <select
           className="project-select"
-          title="切换项目(每个项目有独立的生图与软件画布)"
+          title={t('topbar.project')}
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
         >
@@ -205,23 +206,26 @@ export default function App(): JSX.Element {
 
         {/* 工作区切换:生图 / 软件制作 两个独立页面(图标化,悬停显示名称) */}
         <div className="ws-tabs" role="tablist">
-          {WORKSPACE_LIST.map((ws) => (
-            <button
-              key={ws}
-              role="tab"
-              aria-selected={workspace === ws}
-              title={WORKSPACE_LABEL[ws]}
-              aria-label={WORKSPACE_LABEL[ws]}
-              className={workspace === ws ? 'ws-tab on' : 'ws-tab'}
-              onClick={() => setWorkspace(ws)}
-            >
-              <Icon name={ws === 'app' ? 'terminal' : 'image'} size={14} />
-            </button>
-          ))}
+          {WORKSPACE_LIST.map((ws) => {
+            const label = t(`ws.${ws}`)
+            return (
+              <button
+                key={ws}
+                role="tab"
+                aria-selected={workspace === ws}
+                title={label}
+                aria-label={label}
+                className={workspace === ws ? 'ws-tab on' : 'ws-tab'}
+                onClick={() => setWorkspace(ws)}
+              >
+                <Icon name={ws === 'app' ? 'terminal' : 'image'} size={14} />
+              </button>
+            )
+          })}
         </div>
 
         <span className="badge">{canvasName}</span>
-        <span className="badge">{nodeCount} 个节点</span>
+        <span className="badge">{t('topbar.nodes', undefined, { n: String(nodeCount) })}</span>
 
         <ProjectDirButton />
 
@@ -229,35 +233,35 @@ export default function App(): JSX.Element {
 
         {saveError ? (
           <span className="badge err" title={saveError}>
-            存盘失败
+            {t('topbar.saveFailed')}
           </span>
         ) : (
-          saving && <span className="badge">保存中…</span>
+          saving && <span className="badge">{t('topbar.saving')}</span>
         )}
 
         {/* 模型入口:选中节点时显示该节点的模型,否则显示全局默认。绿=已配置,红=未配置。点击打开设置 */}
         <button
           className={shownModel ? 'badge ok model-flag' : 'badge err model-flag'}
           title={modelTitle}
-          aria-label={shownModel ? `模型 ${shownModel}` : '配置模型'}
+          aria-label={shownModel ? t('topbar.model', undefined, { m: shownModel }) : t('topbar.modelConfigure')}
           onClick={() => setShowSettings(true)}
         >
           <Icon name="terminal" size={12} />
         </button>
 
         <MemoryMeter />
-        <button onClick={() => setShowSkills(true)} title="管理已安装的技能" aria-label="管理已安装的技能">
+        <button onClick={() => setShowSkills(true)} title={t('topbar.skills')} aria-label={t('topbar.skills')}>
           <Icon name="skill" size={14} />
         </button>
         <button
           className="ghost"
           onClick={() => setShowShortcuts(true)}
-          title="键盘快捷键 (?)"
-          aria-label="键盘快捷键"
+          title={t('topbar.shortcuts')}
+          aria-label={t('topbar.shortcuts')}
         >
           <Icon name="keyboard" size={14} />
         </button>
-        <button onClick={() => setShowSettings(true)} title="设置 (Ctrl+,)" aria-label="设置 (Ctrl+,)">
+        <button onClick={() => setShowSettings(true)} title={t('topbar.settings')} aria-label={t('topbar.settings')}>
           <Icon name="settings" size={14} />
         </button>
 

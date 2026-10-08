@@ -1,6 +1,7 @@
 import { useState, type JSX } from 'react'
 import { useNodeActions } from '../../hooks/useNodeActions'
 import { useLiveStore, useRuntimeStore } from '../../stores/runtimeStore'
+import { t } from '../../lib/i18n'
 
 export function Composer({ nodeId }: { nodeId: string }): JSX.Element {
   const [input, setInput] = useState('')
@@ -21,7 +22,7 @@ export function Composer({ nodeId }: { nodeId: string }): JSX.Element {
       <div className="row">
         <textarea
           value={input}
-          placeholder={running ? '正在运行…' : 'Enter 发送 · Shift+Enter 换行'}
+          placeholder={running ? t('inspector.runningPlaceholder') : t('inspector.enterSend')}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             /*
@@ -46,11 +47,11 @@ export function Composer({ nodeId }: { nodeId: string }): JSX.Element {
         />
         {running ? (
           <button className="danger" onClick={() => void cancel()}>
-            取消
+            {t('inspector.cancel')}
           </button>
         ) : (
           <button className="primary" onClick={() => void submit()} disabled={!input.trim()}>
-            发送
+            {t('inspector.send')}
           </button>
         )}
       </div>
@@ -63,11 +64,11 @@ export function Composer({ nodeId }: { nodeId: string }): JSX.Element {
         ) : (
           <>
             <span className="keys">
-              <span className="kbd">Enter</span> 发送 · <span className="kbd">Shift</span>
+              <span className="kbd">Enter</span> {t('inspector.sendWord')} · <span className="kbd">Shift</span>
               <span className="sc-sep">+</span>
-              <span className="kbd">Enter</span> 换行
+              <span className="kbd">Enter</span> {t('inspector.newlineWord')}
             </span>
-            <span className="muted">prompt 走 stdin · 直接 spawn claude.exe(不经 cmd.exe)</span>
+            <span className="muted">{t('inspector.stdinNote')}</span>
           </>
         )}
       </div>

@@ -24,6 +24,8 @@ import { workspaceNodeList, WORKFLOW_TEMPLATES, type WorkspaceId } from '../../.
 import { Icon, NodeIcon } from '../components/Icons'
 import { ProbeCard } from './ProbeCard'
 import type { NodeConfig, NodeKind } from '../../../shared/canvas'
+import { t, nodeEntryLabel } from '../lib/i18n'
+import { exportWorkflowFile, importWorkflowFile } from '../lib/workflowIO'
 
 /** 节点数超过这个值就自动关掉 MiniMap —— 小地图要一直维护一张全图缩略 */
 const MINIMAP_MAX_NODES = 50
@@ -49,8 +51,6 @@ function CanvasInner(): JSX.Element {
     [workspace],
   )
   const [wfMenuOpen, setWfMenuOpen] = useState(false)
-  const exportWorkflow = useGraphStore((s) => s.exportWorkflow)
-  const importWorkflow = useGraphStore((s) => s.importWorkflow)
   const applyTemplate = useGraphStore((s) => s.applyTemplate)
   const removeEdge = useGraphStore((s) => s.removeEdge)
   const encapsulate = useGraphStore((s) => s.encapsulate)
@@ -243,11 +243,11 @@ function CanvasInner(): JSX.Element {
             className="primary"
             aria-haspopup="menu"
             aria-expanded={addMenuOpen}
-            title="添加节点 (Ctrl+K)"
+            title={t('canvas.addNodeHint')}
             onClick={() => setAddMenuOpen(!addMenuOpen)}
           >
             <Icon name="plus" size={12} />
-            添加节点
+            {t('canvas.addNode')}
           </button>
           {addMenuOpen && (
             <div className="add-menu" role="menu" onKeyDown={onMenuKeyDown}>
@@ -277,13 +277,13 @@ function CanvasInner(): JSX.Element {
                   <span className={`add-icon ic-${entry.icon ?? entry.kind}`}>
                     <NodeIcon name={entry.icon} size={13} />
                   </span>
-                  <span className="add-label">{entry.label}</span>
+                  <span className="add-label">{nodeEntryLabel(entry.kind, entry.label)}</span>
                 </button>
               ))}
               <div className="add-foot">
                 <span className="kbd">↑</span>
-                <span className="kbd">↓</span> 选择 · <span className="kbd">Enter</span> 添加 ·{' '}
-                <span className="kbd">1-{ADD_ENTRIES.length}</span> 直选
+                <span className="kbd">↓</span> {t('canvas.menuSelect')} · <span className="kbd">Enter</span>{' '}
+                {t('canvas.menuAdd')} · <span className="kbd">1-{ADD_ENTRIES.length}</span> {t('canvas.menuDirect')}
               </div>
             </div>
           )}
@@ -295,7 +295,7 @@ function CanvasInner(): JSX.Element {
         */}
         {multiCount >= 2 && (
           <button
-            title="把选中的节点封装成一个子图节点(运行时照常展开执行)"
+            title={t('canvas.encapsulateHint')}
             onClick={() => {
               const ids = useUiStore.getState().selectedIds
               const id = encapsulate(ids)
@@ -304,7 +304,7 @@ function CanvasInner(): JSX.Element {
             }}
           >
             <Icon name="subgraph" size={12} />
-            封装成子图
+            {t('canvas.encapsulate')}
           </button>
         )}
         {/*
@@ -315,94 +315,74 @@ function CanvasInner(): JSX.Element {
           实际删的是刚选中的线"这种错位。
         */}
         {selectedEdgeId ? (
-          <button title="切断这条连线 (Delete)" onClick={() => removeEdge(selectedEdgeId)}>
+          <button title={t('canvas.disconnectEdgeHint')} onClick={() => removeEdge(selectedEdgeId)}>
             <Icon name="scissors" size={12} />
-            断开连线
+            {t('canvas.disconnectEdge')}
           </button>
         ) : (
           <button
             disabled={!selectedNodeId}
-            title={selectedNodeId ? '删除选中节点 (Delete)' : '先点选一个节点'}
+            title={selectedNodeId ? t('canvas.deleteSelectedHint') : t('canvas.deleteSelectedDisabled')}
             onClick={() => {
               if (selectedNodeId) void deleteNodeWithConfirm(selectedNodeId)
             }}
           >
             <Icon name="close" size={12} />
-            删除选中
+            {t('canvas.deleteSelected')}
           </button>
         )}
 
         {/*
           工作流菜单(v0.6.0):导出 / 导入 / 模板。
           参考 ComfyUI 的工作流 JSON(图可序列化、可分享)与 Langflow / Coze 的模板市场。
+          导出 / 导入与快捷键 Ctrl+E / Ctrl+I 共用 workflowIO,菜单按钮不再是另一份实现。
         */}
         <div className="wf-wrap" style={{ position: 'relative' }}>
           <button
-            title="工作流:导出/导入 JSON、一键套用模板"
+            title={t('canvas.workflowHint')}
             aria-expanded={wfMenuOpen}
             onClick={() => setWfMenuOpen((v) => !v)}
           >
             <Icon name="subgraph" size={12} />
-            工作流
+            {t('canvas.workflow')}
           </button>
           {wfMenuOpen && (
             <div className="wf-menu">
               <button
-                title="把当前画布保存成 .json 文件,可分享 / 备份"
+                title={t('canvas.exportDialogTitle')}
                 onClick={() => {
                   setWfMenuOpen(false)
-                  void (async () => {
-                    const res = await window.api.dialog.saveFile(
-                      '导出工作流',
-                      'workflow.json',
-                      [{ name: 'Node AI Development Tool 工作流', extensions: ['json'] }],
-                    )
-                    if (!res.ok || !res.data) return
-                    const path = res.data
-                    const ok = await window.api.fs.writeText(path, exportWorkflow())
-                    if (ok.ok) alert(`工作流已导出:${path}`)
-                    else alert(`导出失败:${ok.error ?? '未知错误'}`)
-                  })()
+                  void exportWorkflowFile()
                 }}
               >
-                导出工作流 (.json)
+                {t('canvas.exportWf')}
               </button>
               <button
-                title="从 .json 文件恢复一张画布(会替换当前画布,可用撤销找回)"
+                title={t('canvas.importDialogTitle')}
                 onClick={() => {
                   setWfMenuOpen(false)
-                  void (async () => {
-                    const res = await window.api.dialog.pickFile('导入工作流', [
-                      { name: 'Node AI Development Tool 工作流', extensions: ['json'] },
-                      { name: '全部文件', extensions: ['*'] },
-                    ])
-                    if (!res.ok || !res.data) return
-                    const path = res.data
-                    const rd = await window.api.fs.readText(path)
-                    if (!rd.ok) {
-                      alert(`读取失败:${rd.error ?? '未知错误'}`)
-                      return
-                    }
-                    const imp = importWorkflow(rd.data)
-                    alert(imp.ok ? `工作流已导入(${useGraphStore.getState().nodes.length} 个节点)` : imp.error ?? '导入失败')
-                  })()
+                  void importWorkflowFile()
                 }}
               >
-                导入工作流 (.json)
+                {t('canvas.importWf')}
               </button>
               <div className="wf-menu-sep" />
-              <div className="wf-menu-title">一键模板</div>
+              <div className="wf-menu-title">{t('canvas.templates')}</div>
               {TEMPLATE_LIST.map(([key, tpl]) => (
                 <button
                   key={key}
-                  title={tpl.desc}
+                  title={t(`template.${key}.desc`, tpl.desc)}
                   onClick={() => {
                     setWfMenuOpen(false)
                     const res = applyTemplate(key, workspace as WorkspaceId)
-                    alert(res.ok ? `已套用模板「${tpl.label}」:${tpl.desc}` : (res.error ?? '套用失败'))
+                    alert(
+                      res.ok
+                        ? t('canvas.templateApplied', undefined, { label: t(`template.${key}`, tpl.label), desc: t(`template.${key}.desc`, tpl.desc) })
+                        : (res.error ?? t('canvas.templateFailed')),
+                    )
                   }}
                 >
-                  {tpl.label}
+                  {t(`template.${key}`, tpl.label)}
                 </button>
               ))}
             </div>
@@ -424,14 +404,14 @@ function CanvasInner(): JSX.Element {
           </span>
         ) : (
           <span className="hint-inline">
-            拖节点 · 拉右边的点连线 · 鼠标移到线上按 E 剪断 · 点节点在右栏对话 ·{' '}
+            {t('canvas.hintLine')}
             <button
               className="linklike"
-              title="全部快捷键 (?)"
+              title={t('canvas.shortcutsHint')}
               onClick={() => useUiStore.getState().setShowShortcuts(true)}
             >
               <Icon name="keyboard" size={12} />
-              快捷键
+              {t('canvas.shortcuts')}
             </button>
           </span>
         )}

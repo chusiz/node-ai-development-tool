@@ -86,6 +86,15 @@ interface UiState {
    */
   selectionTab: InspectorTab | null
 
+  /**
+   * 「重命名请求」(v0.6.6 快捷键 F2)。
+   *
+   * 双击标题就地改名是 NodeShell 的内部 state,快捷键在 App 层 ——
+   * 用一个显式的小槽把两者接起来:App 层按下 F2 写进 nodeId,
+   * NodeShell 看到自己的 id 就进入改名态,再把它清掉(一次性消费)。
+   */
+  renameRequestId: string | null
+
   // ---- 双工作区 + 多项目(v0.5.0)----
   /** 当前工作区:生图 / 软件制作(各自独立的画布与节点集合) */
   workspace: WorkspaceId
@@ -104,6 +113,8 @@ interface UiState {
   /** 取走并清空这次选中附带的页签意图。没有则返回 null */
   consumeSelectionTab(): InspectorTab | null
   setInspectorTab(tab: InspectorTab): void
+  /** 请求某个节点进入就地改名态(F2)。NodeShell 消费后应调用 requestRename(null) 清掉 */
+  requestRename(nodeId: string | null): void
   toggleDiag(): void
   setShowSettings(v: boolean): void
   setShowSkills(v: boolean): void
@@ -131,6 +142,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   addMenuOpen: false,
   showShortcuts: false,
   selectionTab: null,
+  renameRequestId: null,
   probe: null,
   selectedIds: [],
   workspace: 'app',
@@ -165,6 +177,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   setShowShortcuts: (showShortcuts) => set({ showShortcuts }),
   setProbe: (probe) => set({ probe }),
   setMultiSelection: (selectedIds) => set({ selectedIds }),
+  requestRename: (renameRequestId) => set({ renameRequestId }),
 
   /*
    * 切工作区 / 切项目:只改状态,不碰画布 —— App 层监听 workspace/projectId
