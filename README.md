@@ -148,4 +148,6 @@ scripts/
 
 All contributions welcome: issues, bug fixes, new node types, docs. See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-**This project is waiting for the right person to take it further** — next releases could bring: APK/web packaging, direct ComfyUI workflow import, more built-in nodes (audio / OCR / data pipelines), and per-node skill scoping.
+**This project is waiting for the right person to take it further** — see [ROADMAP.md](./docs/ROADMAP.md) for the full plan (engineering trust → platform capability → ecosystem). Picked highlights: node plugin SDK, Human Approval / Policy / Secrets Vault / Rollback nodes, budget & cost control, parallel-agent voting, release & deploy pipeline, and an "AI software factory" quality-gate loop.
+
+v0.6.3 (2026-10-08): cross-platform e2e & CLI locator, e2e SKIP instead of crash, debug-log cleanup, version unification (tag `v0.6.3` + changelog), 3 golden workflow templates (enterprise AI coding / game-art pipeline / multi-agent competition), roadmap doc.

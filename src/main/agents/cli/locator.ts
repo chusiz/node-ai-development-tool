@@ -132,6 +132,51 @@ async function shimCandidates(base: string): Promise<string[]> {
   return out
 }
 
+/**
+ * 跨平台 PATH 查找:Windows 用 where,Linux/macOS 用 which,
+ * 两条路都失败时再手动遍历 PATH + 平台扩展名兜底。
+ * 这样 CLI 定位不再只认 Windows(问题 #2:Linux/macOS detect() 永远 null)。
+ */
+async function pathCandidates(cmd: string): Promise<string[]> {
+  if (process.platform === 'win32') {
+    try {
+      const { stdout } = await run('where', [cmd], { windowsHide: true, timeout: 15_000 })
+      const out = stdout
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (out.length) return out
+    } catch {
+      /* where 不可用,走 PATH 遍历兜底 */
+    }
+  } else {
+    try {
+      const { stdout } = await run('which', [cmd], { timeout: 15_000 })
+      const out = stdout
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (out.length) return out
+    } catch {
+      /* which 不可用,走 PATH 遍历兜底 */
+    }
+  }
+  // 兜底:遍历 PATH(兼容 where/which 均缺失的环境)
+  const dirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean)
+  const exts = process.platform === 'win32' ? ['', '.exe', '.cmd', '.bat'] : ['']
+  const found: string[] = []
+  for (const d of dirs) {
+    for (const e of exts) {
+      const p = path.join(d, cmd + e)
+      if (await isFile(p)) {
+        found.push(p)
+        break
+      }
+    }
+  }
+  return found
+}
+
 export interface LocateOptions {
   /** 命令名,如 `claude` / `codebuddy` / `codex` */
   command: string
@@ -188,13 +233,9 @@ export async function locateCli(o: LocateOptions): Promise<CliLocation> {
     }
   }
 
-  // ③ PATH。先找 .exe,再退回解析 shim
+  // ③ PATH。先找 .exe,再退回解析 shim(跨平台:where/which/PATH 遍历)
   try {
-    const { stdout } = await run('where', [o.command], { windowsHide: true, timeout: 15_000 })
-    const candidates = stdout
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean)
+    const candidates = await pathCandidates(o.command)
 
     for (const c of candidates) {
       tried.push(c)

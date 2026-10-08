@@ -150,7 +150,7 @@ import type { ChatMessage, ToolDef } from '../src/main/agents/api/types'
 import type { NodeEvent, SessionStatus } from '../src/shared/ipc'
 import { escapeJsonInner } from '../src/main/imagegen/template'
 
-const CWD = 'D:\\haowan\\workspaces\\default'
+const CWD = path.join(process.cwd(), 'workspaces', 'default')
 /*
  * 画布归属。测试直接驱动 SessionManager(绕开 IPC),而 manager 自己不用 canvasId ——
  * 它只有日志中枢才需要。但 StartRequest 把它标成必填,是为了逼渲染进程每次都说清
@@ -910,12 +910,12 @@ async function projectDirTests(): Promise<void> {
   const sandbox = resolveStartCwd(CANVAS, '')
   const norm = (p: string): string => p.replace(/\\/g, '/')
   assert(
-    norm(sandbox) === `D:/haowan/workspaces/${CANVAS}`,
+    norm(sandbox) === norm(path.join(process.cwd(), 'workspaces', CANVAS)),
     `空 cwd 落到画布沙箱(实际 ${sandbox})`,
   )
   assert(existsSync(sandbox), '沙箱目录会按需建出来,不用用户先去手动创建')
   assert(
-    !norm(sandbox).startsWith('D:/haowan/src'),
+    !norm(sandbox).startsWith(norm(path.join(process.cwd(), 'src'))),
     `沙箱绝不在应用源码目录里(实际 ${sandbox})`,
   )
 
@@ -5491,13 +5491,16 @@ async function imageChainTests(): Promise<void> {
     // ==================== ⑤c 内置模板工作流(v0.6.0/0.6.1):结构 / 归属 / 边下标 ====================
     {
       const names = Object.keys(WORKFLOW_TEMPLATES)
-      assert(names.length === 5, `内置模板恰好 5 个(实际 ${names.join(',')})`)
+      assert(names.length === 8, `内置模板恰好 8 个(实际 ${names.join(',')})`)
       const expectKinds: Record<string, string[]> = {
         'desktop-app': ['project', 'feature', 'review', 'test', 'output'],
         'mobile-web': ['project', 'feature', 'output'],
         'pixel-game': ['project', 'image', 'handoff', 'game', 'output'],
         'image-flows': ['prompt', 'prompt_negative', 'sampler', 'image_output'],
         'agent-orchestration': ['project', 'agent', 'agent', 'agent', 'merge', 'agent', 'output'],
+        'enterprise-ai-coding': ['project', 'agent', 'agent', 'feature', 'test', 'agent', 'output'],
+        'game-art-pipeline': ['project', 'image', 'image', 'handoff', 'game', 'output'],
+        'multi-agent-competition': ['project', 'agent', 'agent', 'merge', 'test', 'output'],
       }
       for (const name of names) {
         const t = WORKFLOW_TEMPLATES[name]
@@ -5513,14 +5516,20 @@ async function imageChainTests(): Promise<void> {
       assert(
         WORKFLOW_TEMPLATES['desktop-app'].workspace === 'app' &&
           WORKFLOW_TEMPLATES['mobile-web'].workspace === 'app' &&
-          WORKFLOW_TEMPLATES['pixel-game'].workspace === 'app',
+          WORKFLOW_TEMPLATES['pixel-game'].workspace === 'app' &&
+          WORKFLOW_TEMPLATES['enterprise-ai-coding'].workspace === 'app' &&
+          WORKFLOW_TEMPLATES['game-art-pipeline'].workspace === 'app' &&
+          WORKFLOW_TEMPLATES['multi-agent-competition'].workspace === 'app',
         '软件模板归属软件制作工作区',
       )
       assert(
         WORKFLOW_TEMPLATES['desktop-app'].nodes[4].preset?.buildTarget === 'exe' &&
           WORKFLOW_TEMPLATES['mobile-web'].nodes[2].preset?.buildTarget === 'web' &&
           WORKFLOW_TEMPLATES['pixel-game'].nodes[4].preset?.buildTarget === 'game' &&
-          WORKFLOW_TEMPLATES['agent-orchestration'].nodes[6].preset?.buildTarget === 'exe',
+          WORKFLOW_TEMPLATES['agent-orchestration'].nodes[6].preset?.buildTarget === 'exe' &&
+          WORKFLOW_TEMPLATES['enterprise-ai-coding'].nodes[6].preset?.buildTarget === 'exe' &&
+          WORKFLOW_TEMPLATES['game-art-pipeline'].nodes[5].preset?.buildTarget === 'game' &&
+          WORKFLOW_TEMPLATES['multi-agent-competition'].nodes[5].preset?.buildTarget === 'exe',
         '模板输出节点带正确打包目标(exe/web/game)',
       )
       assert(
@@ -7898,11 +7907,14 @@ function stubProbeFetch(
 const main = async (): Promise<void> => {
   console.log('\n========== 1. 探测 claude ==========')
   const adapter = getAdapter('claude')
-  const loc = await adapter.detect()
-  console.log(loc)
-  assert(!!loc, '定位到 claude 可执行文件')
-  assert(!!loc && loc.exe.toLowerCase().endsWith('.exe'), '拿到的是 .exe 而非 .cmd 壳')
-  assert(!!loc?.version, `读出版本: ${loc?.version}`)
+  const loc = await adapter.detect().catch(() => null)
+  if (!loc) {
+    // 问题 #2:无 CLI 时整段 SKIP 而非崩溃 —— 机制断言仍由第 18 节合成适配器覆盖
+    skip('claude CLI 未安装或不可定位:第 1-9 节跳过(机制断言由第 18 节合成适配器覆盖)', 'cli 缺失')
+  } else {
+    console.log(loc)
+    assert(loc.exe.toLowerCase().endsWith('.exe'), '拿到的是 .exe 而非 .cmd 壳')
+    assert(!!loc?.version, `读出版本: ${loc?.version}`)
 
   console.log('\n========== 2. 第一轮(全新会话) ==========')
   const r1 = await mgr.start({ nodeId: 'e2e-1', canvasId: CANVAS, cwd: CWD, prompt: '只回复两个字:成功' })
@@ -7994,6 +8006,7 @@ const main = async (): Promise<void> => {
 
   console.log('\n========== 9. 重启后接上上下文:hub 读回 sessionId / 轮数 / 中断态 ==========')
   await hydrateTests()
+  }
 
   console.log('\n========== 10. 设置:损坏文件降级 / 逐字段回退 / 启动开关 ==========')
   await settingsTests()

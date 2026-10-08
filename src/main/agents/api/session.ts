@@ -331,8 +331,6 @@ export class ApiSession implements LiveSession {
         } catch {
           /* 读不到就算了 */
         }
-        // [FULLFLOW-DEBUG] 临时诊断:打印原始 HTTP 状态与响应体(排查 402 来源)
-        console.error('[CHAT_HTTP]', res.status, url, detail.slice(0, 200))
         return {
           text: acc,
           toolCalls: [],

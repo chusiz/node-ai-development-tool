@@ -1,0 +1,41 @@
+# Changelog
+
+本文件记录 Node AI Development Tool（chusiz）的版本演进。版本号与 `package.json` 保持一致，每个 release 绑定 Git Tag（`vX.Y.Z`）。
+
+## [0.6.3] - 2026-10-08 — 工程可信度收尾
+
+### 修复（社区回馈的 3 个真问题）
+- **e2e 硬编码开发机盘符**：`scripts/e2e.ts` 的 `CWD` 与沙箱断言、`scripts/run-image-local.ts` 的工程路径全部改为基于 `process.cwd()` / 相对路径 —— 测试套件现在可在 Linux / macOS 上完整运行。
+- **claude locator 跨平台**：`src/main/agents/cli/locator.ts` 的 PATH 查找不再只依赖 Windows `where` —— 新增 `which`（Linux/macOS）与 PATH 遍历兜底，`detect()` 在非 Windows 平台也能定位 CLI。
+- **e2e 无 CLI 时 SKIP 而非崩溃**：探测失败现在走 `skip()`（机制断言仍由第 18 节合成适配器覆盖），而不是让整个套件在第二节直接崩掉。
+- **移除生产代码调试日志**：`src/main/agents/api/session.ts` 中残留的 `console.error('[CHAT_HTTP]')`（FULLFLOW-DEBUG 标记）已清理。
+
+### 新增
+- **3 个黄金工作流模板**（对应改进建议"成熟度最高的组合"）：
+  - `enterprise-ai-coding` 企业级 AI 编程：需求 → 规划 → 审查 → 编码 → 测试 → 审查(安全) → 打包 exe
+  - `game-art-pipeline` AI 游戏美术管线：生图(风格/批量) → 素材交接 → 游戏工程 → 打包
+  - `multi-agent-competition` 多模型竞争：项目 → 并行实现 → 整合对比 → 测试评估 → 输出
+- **`docs/ROADMAP.md`**：把改进建议整理成开源路线图（工程可信 → 平台能力 → 生态商业化），供社区按优先级接单。
+
+### 工程
+- 产品版本与代码版本统一：`package.json` `0.1.0` → `0.6.3`（与 README / 报告一致）；新增本 CHANGELOG；打 Git Tag `v0.6.3`。
+
+## [0.6.2] - 2026-10-06 — 图表节点 + 开源技能市场
+
+- chart 可视化节点（ECharts SSR → SVG，柱/折/饼/散点/漏斗，5 种数据形状宽容解析，产物随项目打包）。
+- 开源技能市场：GitHub/Gitee URL 一键安装（域名白名单 + zip slip 防护 + 危险命令扫描），市场页签 + 精选技能集。
+
+## [0.6.1] - 2026-10-06 — 工程化 agent 编排
+
+- agent（智能体循环）节点：多轮迭代，`doneHint` 完成标志提前收尾。
+- router（LLM 路由）节点：从出边选一条分支激活，其余自动跳过。
+- 内置 `agent-orchestration` 模板。
+
+## [0.6.0] - 2026-10-06 — 多平台完整制作
+
+- 输出节点四目标：exe / Web 静态站点 / Android apk（无 SDK 自动降级 PWA）/ Godot 游戏 zip。
+- 工作流 JSON 导入导出（ComfyUI 式）；内置 4 个模板；游戏增强。
+
+## [0.5.0] - 2026-10-06 — 双工作区 + 多项目 + 开源发布
+
+- 生图 / 软件制作双页面拆分；交接节点跨页素材共享；多项目并行；本地模型直出生图；exe 直接打包；开源到 GitHub。
