@@ -12,6 +12,7 @@ import { VideoNode } from './VideoNode'
 import { HandoffNode } from './HandoffNode'
 import { SubgraphNode } from './SubgraphNode'
 import { PromptNode, NegativeNode, SamplerNode, ImageOutputNode } from './ImageFlowNodes'
+import { PythonNode } from './PythonNode'
 
 /**
  * ⚠️ 必须是**模块级常量**,而且只在这里定义这一次。
@@ -51,4 +52,5 @@ export const nodeTypes = {
   prompt_negative: NegativeNode,
   sampler: SamplerNode,
   image_output: ImageOutputNode,
+  python: PythonNode,
 } satisfies NodeTypes

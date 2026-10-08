@@ -13,6 +13,7 @@ import type {
   ImageParams,
   ImageProviderConfig,
   NodeKind,
+  PythonParams,
   SubgraphTemplate,
   VideoParams,
 } from './canvas'
@@ -120,6 +121,8 @@ export interface WorkflowNodeSpec {
   routes?: string[]
   /** chart 专属(v0.6.2):图表参数(类型/标题/画布尺寸) */
   chartParams?: ChartParams
+  /** python 专属(v0.6.4):脚本 / 脚本文件 / 参数 / python 路径 */
+  pythonParams?: PythonParams
 }
 
 export interface WorkflowEdgeSpec {
@@ -209,6 +212,13 @@ export interface RunNodeState {
    * 全文不进运行态(会撑爆每次推送的快照),预览够回答"它交出了什么"。
    */
   outputPreview?: string
+  /**
+   * 内置动作节点本次执行的**输入指纹**(v0.6.4 增量执行)。
+   * 下一次运行若上游产出与本节点配置都没变,调度器跳过执行、复用本产出。
+   */
+  inputHash?: string
+  /** v0.6.4 增量执行:输入未变,本次运行**未真实执行**,直接复用上次产出 */
+  reused?: boolean
   /**
    * 内置动作节点本次产出的**相对项目文件夹**路径列表(image 节点写它)。
    * 随 RunState 落盘 → 重启后节点卡片仍能显示缩略图(M-2:只覆盖最近一次运行)。
@@ -900,6 +910,7 @@ export function specFromGraph(args: {
         doneHint: isSession && kind === 'agent' ? (n.data.doneHint ?? '任务完成') : undefined,
         routes: isSession && kind === 'router' ? (Array.isArray(n.data.routes) ? n.data.routes.map(String) : []) : undefined,
         chartParams: def.action === 'chart' ? n.data.chartParams : undefined,
+        pythonParams: def.action === 'python' ? n.data.pythonParams : undefined,
       }
     }),
     edges: expanded.edges.map((e) => ({ source: e.source, target: e.target })),
@@ -973,6 +984,8 @@ export interface NodeSpecSource {
   routes?: string[]
   /** chart 专属(v0.6.2):图表参数(类型/标题/画布尺寸) */
   chartParams?: ChartParams
+  /** python 专属(v0.6.4):脚本 / 脚本文件 / 参数 / python 路径 */
+  pythonParams?: PythonParams
 }
 
 export interface GraphIssue {

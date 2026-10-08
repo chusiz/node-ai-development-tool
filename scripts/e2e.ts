@@ -4570,10 +4570,10 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
      * 顺序 = NODE_TYPES 的键插入顺序;新类型追加在末尾,老入口的相对位置不动 ——
      * 菜单里的数字键直选(1-9)依赖这个顺序,挪一下用户的肌肉记忆就废了。
      */
-    assert(entries.length === 20, `添加入口恰好 20 项(实际 ${entries.length})`)
+    assert(entries.length === 21, `添加入口恰好 21 项(实际 ${entries.length})`)
     assert(
       entries.map((e) => e.kind).join(',') ===
-        'project,feature,feature,merge,output,image,review,test,doc,game,video,handoff,agent,agent,router,chart,prompt,prompt_negative,sampler,image_output',
+        'project,feature,feature,merge,output,image,review,test,doc,game,video,handoff,agent,agent,router,chart,python,prompt,prompt_negative,sampler,image_output',
       `入口顺序/类型正确(实际 ${entries.map((e) => e.kind).join(',')})`,
     )
     /*
@@ -4614,6 +4614,7 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
       { kind: 'agent', label: '智能体(并行)', icon: 'parallel', hint: '独立支路的智能体(并行跑,不自动注入上游产出)' },
       { kind: 'router', label: '路由(分支)', icon: 'router', hint: 'LLM 看完上游成果后选一条出边分支激活,其余分支自动跳过' },
       { kind: 'chart', label: '图表', icon: 'chart', hint: '可视化:把上游文本里的 JSON 数据渲染成 SVG 图表,随项目打包交付' },
+      { kind: 'python', label: 'Python', icon: 'python', hint: '多语言:在项目里跑一段 Python 脚本(stdout 交给下游),不消耗 token' },
       { kind: 'prompt', label: '正向提示词', icon: 'prompt', hint: '生图:写画面要什么,连到采样出图节点' },
       {
         kind: 'prompt_negative',
@@ -4642,7 +4643,7 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
     }))
     assert(
       JSON.stringify(actualEntries) === JSON.stringify(expectedEntries),
-      `二十条入口的 label/icon/hint 与声明表逐字相等(实际 ${JSON.stringify(actualEntries)})`,
+      `二十一条入口的 label/icon/hint 与声明表逐字相等(实际 ${JSON.stringify(actualEntries)})`,
     )
     // 文字里不许再有 emoji / 几何图形字符 —— 图标一律走 icon 字段
     const emojiish = /[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u
@@ -8083,12 +8084,129 @@ const main = async (): Promise<void> => {
   console.log('\n========== 31. 模型可用性探测:成本上限 / 并发封顶 / 限流中止 / 三档分开(零网络) ==========')
   await modelProbeTests()
 
+  console.log('\n========== 32. v0.6.4:python 节点 / 增量执行 / 安全审计 / MCP(零 LLM) ==========')
+  await v064FeaturesTests()
+
   console.log('\n========== 结果 ==========')
   // 三态汇总(T09):失败决定退出码;跳过如实披露,不冒充通过
   console.log(`通过 ${passCount} / 跳过 ${skipCount} / 失败 ${failCount}`)
   console.log(failCount > 0 ? '存在失败项' : '全部通过')
   if (skipCount > 0) {
     console.log(`  ⚠️ 有 ${skipCount} 条依赖真实 LLM 的断言被跳过(原因:${llmUnavailable ?? '环境不可用'})`)
+  }
+}
+
+/**
+ * T32 · v0.6.4 新功能回归(零 LLM、零网络):
+ *   python 节点分发 / 增量执行复用 / 安全审计 / MCP JSON-RPC。
+ */
+async function v064FeaturesTests(): Promise<void> {
+  // ---- 32a. python 节点:builtin 分发 + pythonParams 传递 + 产出交下游 ----
+  {
+    const env = new FakeEnv()
+    env.planBuiltin('PY', [{ ok: true, handoffText: '[python] 42', log: 'ok' }])
+    const state = await new WorkflowRunner(env).run(
+      specOf(
+        [
+          nodeSpec('P', '', { kind: 'project', cwd: 'D:\\proj' }),
+          nodeSpec('PY', '', {
+            kind: 'python',
+            pythonParams: { script: 'print(42)', timeoutSec: 30 },
+          }),
+        ],
+        [['P', 'PY']],
+        { canvasId: 'e2e-py' },
+      ),
+    )
+    assert(state.status === 'done', `python 链路完成(实际 ${state.status})`)
+    const call = env.builtinCalls.find((c) => c.nodeId === 'PY')
+    assert(!!call && call.action === 'python', 'python 节点走到 builtin(python)')
+    assert(call!.pythonParams?.script === 'print(42)', 'pythonParams 传到了执行器')
+    assert(call!.pythonParams?.timeoutSec === 30, 'timeoutSec 归一化后传到执行器')
+    assert((state.nodes['PY']?.outputPreview ?? '').includes('[python] 42'), 'python 产出交给下游')
+  }
+
+  // ---- 32b. 增量执行:输入未变 → 复用上次产出,builtin 不再真跑 ----
+  {
+    const canvasId = `e2e-inc-${Date.now()}`
+    const mk = (): WorkflowSpec =>
+      specOf(
+        [
+          nodeSpec('P', '', { kind: 'project', cwd: 'D:\\proj' }),
+          nodeSpec('OUT', '', { kind: 'output', buildTarget: 'web' }),
+        ],
+        [['P', 'OUT']],
+        { canvasId },
+      )
+    const env1 = new FakeEnv()
+    env1.planBuiltin('OUT', [{ ok: true, artifactPath: 'D:\\proj\\dist\\web.zip', log: 'pack ok' }])
+    const r1 = await new WorkflowRunner(env1).run(mk())
+    assert(r1.status === 'done', `首次运行完成(实际 ${r1.status})`)
+    assert(!r1.nodes['OUT']?.reused, '首次运行真实执行(reused 未置位)')
+    // 手动落盘模拟真实 persist(env 的 persist 只收集不写盘;persistRun 是异步的,等一下再读)
+    const { persistRun } = await import('../src/main/workflow/runLog')
+    persistRun(r1)
+    await sleep(400)
+
+    const env2 = new FakeEnv()
+    env2.planBuiltin('OUT', [{ ok: true, artifactPath: 'D:\\proj\\dist\\web2.zip', log: 'pack ok2' }])
+    const r2 = await new WorkflowRunner(env2).run(mk())
+    assert(r2.status === 'done', `第二次运行完成(实际 ${r2.status})`)
+    assert(r2.nodes['OUT']?.reused === true, '输入未变 → 复用上次产出(reused=true)')
+    assert(env2.builtinCalls.length === 0, '增量执行:内置动作没有被再次调用')
+    assert((r2.nodes['OUT']?.outputPreview ?? '').includes('web.zip'), '复用产出:上次产物预览照旧')
+  }
+
+  // ---- 32c. 安全审计:密钥扫描 + 依赖审计结构(零网络,本地无 lock 时 npmAudit 允许为 null) ----
+  {
+    const tmp = path.join(os.tmpdir(), `e2e-audit-${Date.now()}`)
+    await fs.mkdir(tmp, { recursive: true })
+    try {
+      await fs.writeFile(path.join(tmp, 'app.js'), 'const key = "sk-abcdef0123456789ABCDEFGHIJ";\n', 'utf8')
+      await fs.writeFile(path.join(tmp, 'package.json'), '{"name":"x","version":"1.0.0"}\n', 'utf8')
+      const { auditProject } = await import('../src/main/audit')
+      const report = await auditProject(tmp)
+      assert(report.secrets.length >= 1, `扫描到 sk- 密钥(实际 ${report.secrets.length} 条)`)
+      assert(report.secrets[0]!.pattern.includes('sk-'), '命中模式为 sk-')
+      assert(typeof report.npmAudit?.vulnerabilities === 'number' || report.npmAudit === null, 'npmAudit 有结构或本地无依赖可审计(null)')
+      assert(report.summary.length > 0, '审计摘要非空')
+      // .env 之外的隐藏文件不扫(避免把用户目录里的一切都翻出来)
+      const { shouldScanFile } = await import('../src/main/audit')
+      assert(shouldScanFile('app.js') === true && shouldScanFile('.git/config') === false, '跳过点文件只留 .env')
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+
+  // ---- 32d. MCP Server:JSON-RPC initialize / tools.list / tools.call(零网络) ----
+  {
+    const { McpServer } = await import('../src/main/mcp/server')
+    const server = new McpServer({
+      listNodes: () => [{ kind: 'python', label: 'Python', title: 'Python 节点' }],
+      runWorkflow: async (args) => ({ ok: true, runId: 'r-mcp', nodes: [{ nodeId: args.canvasId ?? 'default', title: 'x', status: 'done', resultPreview: 'ok' }] }),
+      getNodeResult: async () => ({ found: true, nodeId: 'PY', text: '[python] 42' }),
+    })
+    const out: string[] = []
+    const origWrite = process.stdout.write.bind(process.stdout)
+    process.stdout.write = ((chunk: unknown) => {
+      out.push(String(chunk))
+      return true
+    }) as typeof process.stdout.write
+    try {
+      const r1 = await server.onLine(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'e2e', version: '0' } } }))
+      if (r1) out.push(r1)
+      const r2 = await server.onLine(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }))
+      if (r2) out.push(r2)
+      const r3 = await server.onLine(JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'run_workflow', arguments: { canvasId: 'default' } } }))
+      if (r3) out.push(r3)
+    } finally {
+      process.stdout.write = origWrite
+    }
+    const joined = out.join('\n')
+    assert(joined.includes('"jsonrpc":"2.0"'), 'MCP 响应是 JSON-RPC 形状')
+    assert(joined.includes('"id":1') && joined.includes('serverInfo'), 'initialize 有响应')
+    assert(joined.includes('"tools"') || joined.includes('list_nodes'), 'tools/list 返回工具清单')
+    assert(joined.includes('r-mcp'), 'tools/call 真的跑了 run_workflow')
   }
 }
 

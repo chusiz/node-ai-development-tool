@@ -2,6 +2,22 @@
 
 本文件记录 Node AI Development Tool（chusiz）的版本演进。版本号与 `package.json` 保持一致，每个 release 绑定 Git Tag（`vX.Y.Z`）。
 
+## [0.6.4] - 2026-10-08 — 工程加固与平台能力（改进建议全落地）
+
+### 新增
+- **节点级错误可视化 + 一键送修**：节点运行失败时卡片出现「送修」按钮，自动新建「修复:xxx」功能节点并连线到出错节点下游（进撤销历史）。
+- **产物预览内置化**：输出节点「预览产物」—— web 起本地静态服务开浏览器、exe 直接启动、game 打开产物目录。
+- **安全审计（打包前自动执行）**：`src/main/audit.ts` 密钥扫描（sk-/AKIA/ark-/github_pat/PRIVATE KEY 等 6 类，跳过 node_modules/.git/dist 与点文件）+ `npm audit --json`；报告落盘 `assets/generated/audit/audit-report.json`。
+- **增量执行**：builtin 节点按输入指纹复用上次产出（`reused` 标记），未变输入不再重跑。
+- **MCP Server**：`npm run mcp` headless 启动，JSON-RPC 2.0 over stdio，工具 `list_nodes` / `run_workflow` / `get_node_result`，复用真实调度器 —— Claude / Cursor 可直接编排。
+- **Python 节点**：子进程跑脚本（cwd 锁定项目目录、超时 5..3600s、stdout 交下游），复用 AI/ML 生态不耗 token。
+- **启动懒加载**：packager/imagegen/videogen/chartgen/testrun/pythonrun 全部动态 import，画布先可用。
+- **新手引导**：画布右上角「?」5 步交互式引导。
+- **治理文档**：CONTRIBUTING.md 重写、CODE_OF_CONDUCT.md、SECURITY.md、docs/ARCHITECTURE.md、docs/PLUGIN.md、docs/实现与验证报告-v0.6.4.md。
+
+### 工程
+- 双端 typecheck 0 错误；e2e 新增第 32 节（python/增量/审计/MCP），全量 **通过 1194 / 跳过 10（LLM 402 余额不足）/ 失败 0**。
+
 ## [0.6.3] - 2026-10-08 — 工程可信度收尾
 
 ### 修复（社区回馈的 3 个真问题）

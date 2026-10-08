@@ -47,16 +47,37 @@ import type { SkillMarketItem } from '../../shared/ipc'
 import { WorkflowRunner, CycleError } from '../workflow/runner'
 import { makeRunnerEnv } from '../workflow/env'
 import { readRun } from '../workflow/runLog'
-import { Packager } from '../packager'
+// v0.6.4 启动懒加载:重模块(Packager / ImageGen / VideoGen / Handoff / ChartGen / TestRunner / PythonRunner)
+// 改为 type import + 惰性工厂 —— 首次真正用到时才动态 import。冷启动只加载轻模块,
+// 图像/打包/图表这些重依赖不再阻塞"画布先可用"。
+import type { Packager } from '../packager'
+import type { ImageGen } from '../imagegen'
+import type { VideoGen } from '../videogen'
+import type { Handoff } from '../handoff'
+import type { ChartGen } from '../chartgen/ChartGen'
+import type { TestRunner } from '../testrun'
+import type { PythonRunner } from '../pythonrun'
 import { killAllBuiltin, registerBuiltinAction } from '../builtin/registry'
-import { ImageGen } from '../imagegen'
-import { VideoGen } from '../videogen'
-import { Handoff } from '../handoff'
-import { ChartGen } from '../chartgen/ChartGen'
-import { TestRunner } from '../testrun'
+import { auditProject } from '../audit'
 import { sdStatus, sdStart, sdStop, type LocalSdStatus, type SdStartResult } from '../localservices'
 import { readThumb } from '../images/readThumb'
 import type { NodeEvent, SessionStatus } from '../agents/types'
+
+// ---- 惰性单例工厂(首次调用才动态 import 重模块) ----
+let _packager: Packager | null = null
+const getPackager = async (): Promise<Packager> => (_packager ??= new (await import('../packager')).Packager())
+let _imagegen: ImageGen | null = null
+const getImagegen = async (): Promise<ImageGen> => (_imagegen ??= new (await import('../imagegen')).ImageGen())
+let _testrun: TestRunner | null = null
+const getTestrun = async (): Promise<TestRunner> => (_testrun ??= new (await import('../testrun')).TestRunner())
+let _videogen: VideoGen | null = null
+const getVideogen = async (): Promise<VideoGen> => (_videogen ??= new (await import('../videogen')).VideoGen())
+let _handoff: Handoff | null = null
+const getHandoff = async (): Promise<Handoff> => (_handoff ??= new (await import('../handoff')).Handoff())
+let _chartgen: ChartGen | null = null
+const getChartgen = async (): Promise<ChartGen> => (_chartgen ??= new (await import('../chartgen/ChartGen')).ChartGen())
+let _pythonrun: PythonRunner | null = null
+const getPythonrun = async (): Promise<PythonRunner> => (_pythonrun ??= new (await import('../pythonrun')).PythonRunner())
 
 function ok<T>(data: T): Envelope<T> {
   return { ok: true, data }
@@ -115,11 +136,11 @@ function broadcast(channel: string, payload: unknown): void {
   }
 }
 
-export function createIpc(): {
+export async function createIpc(): Promise<{
   manager: SessionManager
   hub: NodeLogHub
   runner: WorkflowRunner
-} {
+}> {
   /*
    * 日志中枢。manager 的回调是同步的,而写盘是异步的 ——
    * 串行化在这里做(见 hub.ts 的注释),否则渲染进程会先收到
@@ -157,11 +178,32 @@ export function createIpc(): {
    * ⚠️ 这里不再有人点名 Packager/ImageGen:加一个内置动作(未来 video…)
    * 只需 new 一个执行器 + registerBuiltinAction,调度链路零改动。
    */
-  const packager = new Packager()
-  const imagegen = new ImageGen()
-  const testrun = new TestRunner()
+  const packager = await getPackager()
+  const imagegen = await getImagegen()
+  const testrun = await getTestrun()
   registerBuiltinAction('package', {
-    run: (r) => packager.run(r),
+    run: async (r) => {
+      // v0.6.4 安全审计(改进建议第六条):打包前自动做依赖审计 + 密钥泄露检测,结果进 notice 与产物报告
+      const report = await auditProject(r.projectDir)
+      r.onProgress?.(`[安全审计] ${report.summary.split('\n').join(' | ')}`)
+      const res = await packager.run(r)
+      if (res.ok && r.projectDir) {
+        try {
+          const fsp = await import('node:fs/promises')
+          const pathMod = await import('node:path')
+          const dir = pathMod.join(r.projectDir, 'assets', 'generated', 'audit')
+          await fsp.mkdir(dir, { recursive: true })
+          await fsp.writeFile(
+            pathMod.join(dir, 'audit-report.json'),
+            JSON.stringify({ at: new Date().toISOString(), ...report }, null, 2),
+            'utf8',
+          )
+        } catch {
+          /* 审计报告写不进去不阻塞打包 */
+        }
+      }
+      return res
+    },
     cancel: (id) => packager.cancel(id),
     killAll: () => packager.killAll(),
   })
@@ -175,20 +217,26 @@ export function createIpc(): {
     cancel: (id) => testrun.cancel(id),
     killAll: () => testrun.killAll(),
   })
-  const videogen = new VideoGen()
+  const videogen = await getVideogen()
   registerBuiltinAction('video', {
     run: (r) => videogen.run(r),
     cancel: (id) => videogen.cancel(id),
     killAll: () => videogen.killAll(),
   })
-  const handoff = new Handoff()
+  const handoff = await getHandoff()
   registerBuiltinAction('handoff', {
     run: (r) => handoff.run(r),
   })
   // 可视化图形(v0.6.2):图表节点 —— ECharts SSR 出 SVG,落盘 assets/generated/charts/
-  const chartgen = new ChartGen()
+  const chartgen = await getChartgen()
   registerBuiltinAction('chart', {
     run: (r) => chartgen.run(r),
+  })
+  // v0.6.4 多语言节点:python —— 子进程跑脚本,stdout 交下游(改进建议第七条)
+  const pythonrun = await getPythonrun()
+  registerBuiltinAction('python', {
+    run: (r) => pythonrun.run(r),
+    cancel: (id) => pythonrun.cancel(id),
   })
   /*
    * 生图工作区(v0.5.0)执行器:
@@ -591,6 +639,97 @@ export function createIpc(): {
     if (err) throw new Error(err)
     return { opened: true as const }
   })
+
+  /*
+   * v0.6.4 产物预览(改进建议第二条"产物预览内置化"):
+   *   - web  → 在产物目录起一个本地静态服务,打开默认浏览器;
+   *   - exe  → 直接启动(单文件绿色包/安装包都直接跑);
+   *   - game → 打开 zip 所在目录(Godot 项目需用户自己用 Godot 打开)。
+   * 目录不存在 / 不是目录 → 人话报错,不让用户对着一条 ENOENT 猜。
+   */
+  handle(CH.previewOutput, async (dir: string, target: string) => {
+    if (!dir || typeof dir !== 'string') throw new Error('缺少产物目录')
+    const { stat } = await import('node:fs/promises')
+    let st
+    try {
+      st = await stat(dir)
+    } catch {
+      throw new Error(`产物目录不存在:${dir}(先运行输出节点完成打包)`)
+    }
+    if (!st.isDirectory()) throw new Error(`${dir} 不是目录`)
+    if (target === 'web') {
+      const http = await import('node:http')
+      const fsp2 = await import('node:fs/promises')
+      const pathMod = await import('node:path')
+      const PORT = 0 // 0 = 系统分配空闲端口
+      const server = http.createServer((req, res) => {
+        void (async () => {
+          try {
+            const urlPath = decodeURIComponent((req.url ?? '/').split('?')[0])
+            let p = pathMod.join(dir, urlPath === '/' ? 'index.html' : urlPath)
+            if (!p.startsWith(pathMod.resolve(dir))) {
+              res.writeHead(403).end('forbidden')
+              return
+            }
+            let data: Buffer
+            try {
+              data = await fsp2.readFile(p)
+            } catch {
+              // 目录请求兜底 index.html
+              data = await fsp2.readFile(pathMod.join(p, 'index.html'))
+            }
+            const ext = pathMod.extname(p).toLowerCase()
+            const mime =
+              { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon' }[ext] ?? 'application/octet-stream'
+            res.writeHead(200, { 'content-type': mime }).end(data)
+          } catch {
+            res.writeHead(404).end('not found')
+          }
+        })()
+      })
+      await new Promise<void>((resolve) => server.listen(PORT, '127.0.0.1', resolve))
+      const addr = server.address()
+      const port = typeof addr === 'object' && addr ? addr.port : 4173
+      const url = `http://127.0.0.1:${port}/`
+      const err = await shell.openExternal(url)
+      void err
+      return { opened: true as const, url }
+    }
+    if (target === 'exe') {
+      const { spawn } = await import('node:child_process')
+      const fsp2 = await import('node:fs/promises')
+      const pathMod = await import('node:path')
+      // 在产物目录里找第一个 .exe(dist/ 优先,再兜底根目录)
+      const candidates = [pathMod.join(dir, 'dist'), dir]
+      let exe: string | null = null
+      for (const base of candidates) {
+        try {
+          const entries = await fsp2.readdir(base)
+          const found = entries.find((n) => n.toLowerCase().endsWith('.exe'))
+          if (found) {
+            exe = pathMod.join(base, found)
+            break
+          }
+        } catch {
+          /* 目录不存在就试下一个 */
+        }
+      }
+      if (!exe) {
+        await shell.openPath(dir)
+        return { opened: true as const }
+      }
+      const child = spawn(exe, [], { detached: true, stdio: 'ignore', windowsHide: false })
+      child.unref()
+      return { opened: true as const }
+    }
+    // game 等其它:打开所在目录
+    const err2 = await shell.openPath(dir)
+    if (err2) throw new Error(err2)
+    return { opened: true as const }
+  })
+
+  // v0.6.4 安全审计:依赖审计 + 密钥泄露检测(改进建议第六条)
+  handle(CH.auditProject, async (dir: string) => auditProject(dir))
 
   handle(CH.settingsGet, (): SettingsPayload => settingsPayload())
 

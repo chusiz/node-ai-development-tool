@@ -1,15 +1,15 @@
-/* ============================================================
-   节点画布 + Inspector
+﻿/* ============================================================
+   鑺傜偣鐢诲竷 + Inspector
 
-   与 theme.css 分开是因为这一层是新架构引入的(React Flow 画布 + 右栏),
-   而 theme.css 里那些类是阶段 1 的产物。放在一起会让「哪些样式属于哪一代」
-   看不出来。变量仍然共用 theme.css 的 :root。
+   涓?theme.css 鍒嗗紑鏄洜涓鸿繖涓€灞傛槸鏂版灦鏋勫紩鍏ョ殑(React Flow 鐢诲竷 + 鍙虫爮),
+   鑰?theme.css 閲岄偅浜涚被鏄樁娈?1 鐨勪骇鐗┿€傛斁鍦ㄤ竴璧蜂細璁┿€屽摢浜涙牱寮忓睘浜庡摢涓€浠ｃ€?
+   鐪嬩笉鍑烘潵銆傚彉閲忎粛鐒跺叡鐢?theme.css 鐨?:root銆?
    ============================================================ */
 
 /*
- * 画布区是**上下两段**:stage 占满剩余高度,运行条在下面单独一行。
- * 运行条做成布局里的一行(而不是盖在画布上的浮层),是为了让
- * 「挡住节点」这件事在结构上不可能发生 —— 缩到多小都挡不住。
+ * 鐢诲竷鍖烘槸**涓婁笅涓ゆ**:stage 鍗犳弧鍓╀綑楂樺害,杩愯鏉″湪涓嬮潰鍗曠嫭涓€琛屻€?
+ * 杩愯鏉″仛鎴愬竷灞€閲岀殑涓€琛?鑰屼笉鏄洊鍦ㄧ敾甯冧笂鐨勬诞灞?,鏄负浜嗚
+ * 銆屾尅浣忚妭鐐广€嶈繖浠朵簨鍦ㄧ粨鏋勪笂涓嶅彲鑳藉彂鐢?鈥斺€?缂╁埌澶氬皬閮芥尅涓嶄綇銆?
  */
 .canvas-wrap {
   flex: 1;
@@ -21,10 +21,10 @@
 
 .canvas-stage {
   flex: 1;
-  /* min-height:0 是必须的:没有它,flex 子项的最小高度是内容高度,
-     React Flow 的绝对定位容器会把这一行越撑越高,运行条被挤出视口 */
+  /* min-height:0 鏄繀椤荤殑:娌℃湁瀹?flex 瀛愰」鐨勬渶灏忛珮搴︽槸鍐呭楂樺害,
+     React Flow 鐨勭粷瀵瑰畾浣嶅鍣ㄤ細鎶婅繖涓€琛岃秺鎾戣秺楂?杩愯鏉¤鎸ゅ嚭瑙嗗彛 */
   min-height: 0;
-  /* 「画布是空的」浮层相对它定位 */
+  /* 銆岀敾甯冩槸绌虹殑銆嶆诞灞傜浉瀵瑰畠瀹氫綅 */
   position: relative;
 }
 
@@ -44,7 +44,7 @@
   gap: 10px;
   color: var(--fg-2);
   text-align: center;
-  /* 不挡画布操作,只有按钮可点 */
+  /* 涓嶆尅鐢诲竷鎿嶄綔,鍙湁鎸夐挳鍙偣 */
   pointer-events: none;
 }
 
@@ -61,6 +61,133 @@
 .canvas-empty button {
   pointer-events: auto;
   margin-top: 6px;
+}
+
+/* ---- v0.6.4 鏂版墜寮曞(鐢诲竷鍙充笂瑙掋€?銆? ---- */
+.guide-fab {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 30;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+}
+.guide-fab:hover {
+  border-color: var(--accent);
+  transform: scale(1.06);
+}
+.guide-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.45);
+}
+.guide-card {
+  width: min(440px, 86vw);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.4);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.guide-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--fg-1);
+}
+.guide-close {
+  border: none;
+  background: none;
+  color: var(--fg-2);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.guide-close:hover {
+  color: var(--fg-1);
+}
+.guide-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.guide-step-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+.guide-step-body {
+  font-size: 13px;
+  color: var(--fg-2);
+  line-height: 1.55;
+}
+.guide-step-do {
+  font-size: 12.5px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--fg-1);
+  line-height: 1.5;
+}
+.guide-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.guide-dots {
+  display: inline-flex;
+  gap: 5px;
+}
+.guide-dots .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+}
+.guide-dots .dot.on {
+  background: var(--accent);
+}
+.guide-nav {
+  display: inline-flex;
+  gap: 8px;
+}
+.guide-nav button {
+  border: 1px solid var(--border);
+  background: var(--bg-1);
+  color: var(--fg-1);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.guide-nav button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.guide-nav button:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .canvas-tools {
@@ -82,7 +209,7 @@
   padding: 4px 10px;
 }
 
-/* ---------- 画布上的节点 ---------- */
+/* ---------- 鐢诲竷涓婄殑鑺傜偣 ---------- */
 
 .agent-node {
   width: 232px;
@@ -115,7 +242,7 @@
   text-overflow: ellipsis;
 }
 
-/* 就地改名的输入框:尺寸和标题一致,免得一进编辑态整行就跳一下 */
+/* 灏卞湴鏀瑰悕鐨勮緭鍏ユ:灏哄鍜屾爣棰樹竴鑷?鍏嶅緱涓€杩涚紪杈戞€佹暣琛屽氨璺充竴涓?*/
 .agent-node-rename {
   flex: 1;
   min-width: 0;
@@ -155,7 +282,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* 路径太长时优先露末段(项目名)而不是盘符 */
+  /* 璺緞澶暱鏃朵紭鍏堥湶鏈(椤圭洰鍚?鑰屼笉鏄洏绗?*/
   direction: rtl;
   text-align: left;
 }
@@ -178,7 +305,7 @@
   font-style: italic;
 }
 
-/* React Flow 默认的 handle 是个小方块,这里做成低调的圆点 */
+/* React Flow 榛樿鐨?handle 鏄釜灏忔柟鍧?杩欓噷鍋氭垚浣庤皟鐨勫渾鐐?*/
 .agent-node .rf-handle {
   width: 9px;
   height: 9px;
@@ -191,7 +318,7 @@
   background: var(--accent-dim);
 }
 
-/* ---------- React Flow 自身的暗色适配 ---------- */
+/* ---------- React Flow 鑷韩鐨勬殫鑹查€傞厤 ---------- */
 
 .react-flow__edge-path {
   stroke: var(--border-strong);
@@ -204,14 +331,14 @@
 }
 
 /*
- * 连线中点的「剪断」按钮。
+ * 杩炵嚎涓偣鐨勩€屽壀鏂€嶆寜閽€?
  *
- * ⚠️ 它被 portal 到 `.react-flow__edgelabel-renderer` 里,而 React Flow 给那一层设了
- * 全局 `pointer-events: none`(不设的话,一整块透明覆盖层会吃掉画布上所有点击)。
- * 所以按钮必须自己把 pointer-events 拿回来 —— 但**只在显示时**拿:
- * 隐藏时保持 none,免得一个看不见的按钮蹲在线上偷走点击(那会变成"手滑切断了线")。
+ * 鈿狅笍 瀹冭 portal 鍒?`.react-flow__edgelabel-renderer` 閲?鑰?React Flow 缁欓偅涓€灞傝浜?
+ * 鍏ㄥ眬 `pointer-events: none`(涓嶈鐨勮瘽,涓€鏁村潡閫忔槑瑕嗙洊灞備細鍚冩帀鐢诲竷涓婃墍鏈夌偣鍑?銆?
+ * 鎵€浠ユ寜閽繀椤昏嚜宸辨妸 pointer-events 鎷垮洖鏉?鈥斺€?浣?*鍙湪鏄剧ず鏃?*鎷?
+ * 闅愯棌鏃朵繚鎸?none,鍏嶅緱涓€涓湅涓嶈鐨勬寜閽共鍦ㄧ嚎涓婂伔璧扮偣鍑?閭ｄ細鍙樻垚"鎵嬫粦鍒囨柇浜嗙嚎")銆?
  *
- * 显隐由组件的 hover 状态给(.on),不是 CSS `:hover` —— 原因见 CuttableEdge 的注释。
+ * 鏄鹃殣鐢辩粍浠剁殑 hover 鐘舵€佺粰(.on),涓嶆槸 CSS `:hover` 鈥斺€?鍘熷洜瑙?CuttableEdge 鐨勬敞閲娿€?
  */
 .edge-cut {
   position: absolute;
@@ -237,7 +364,7 @@
   pointer-events: all;
 }
 
-/* 按下去这条线就没了,所以悬停时染成危险色 —— 它不该长得跟普通按钮一样 */
+/* 鎸変笅鍘昏繖鏉＄嚎灏辨病浜?鎵€浠ユ偓鍋滄椂鏌撴垚鍗遍櫓鑹?鈥斺€?瀹冧笉璇ラ暱寰楄窡鏅€氭寜閽竴鏍?*/
 .edge-cut:hover {
   color: var(--err);
   border-color: var(--err);
@@ -254,14 +381,14 @@
 }
 
 /* ============================================================
-   Inspector(右栏)
+   Inspector(鍙虫爮)
    ============================================================ */
 
 .inspector {
   /*
-   * 跟着窗口走,而不是固定 420px。
-   * 固定宽度在 900px 的小窗口上会把画布压到 480px —— 两个节点就摆不下了。
-   * 上限 460 保证宽屏时消息不会拉成一行两百字,下限 340 保证表单还排得开。
+   * 璺熺潃绐楀彛璧?鑰屼笉鏄浐瀹?420px銆?
+   * 鍥哄畾瀹藉害鍦?900px 鐨勫皬绐楀彛涓婁細鎶婄敾甯冨帇鍒?480px 鈥斺€?涓や釜鑺傜偣灏辨憜涓嶄笅浜嗐€?
+   * 涓婇檺 460 淇濊瘉瀹藉睆鏃舵秷鎭笉浼氭媺鎴愪竴琛屼袱鐧惧瓧,涓嬮檺 340 淇濊瘉琛ㄥ崟杩樻帓寰楀紑銆?
    */
   width: clamp(340px, 34vw, 460px);
   flex: 0 0 auto;
@@ -349,7 +476,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  /* 「回到底部」浮层相对它定位 */
+  /* 銆屽洖鍒板簳閮ㄣ€嶆诞灞傜浉瀵瑰畠瀹氫綅 */
   position: relative;
 }
 
@@ -358,7 +485,7 @@
   padding: 14px;
 }
 
-/* 右栏窄,原样的边距会把消息挤成一条 */
+/* 鍙虫爮绐?鍘熸牱鐨勮竟璺濅細鎶婃秷鎭尋鎴愪竴鏉?*/
 .inspector .stream {
   padding: 14px 16px;
 }
@@ -377,7 +504,7 @@
   bottom: 92px;
 }
 
-/* ---------- 节点配置 ---------- */
+/* ---------- 鑺傜偣閰嶇疆 ---------- */
 
 .node-config {
   display: flex;
@@ -446,7 +573,7 @@
   color: var(--err);
 }
 
-/* ---------- 目录选择器 ---------- */
+/* ---------- 鐩綍閫夋嫨鍣?---------- */
 
 .cwd-picker {
   display: flex;
@@ -468,7 +595,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* 路径优先露末段 */
+  /* 璺緞浼樺厛闇叉湯娈?*/
   direction: rtl;
   text-align: left;
 }
@@ -491,7 +618,7 @@ button.primary.mini {
   color: #eaf2ff;
 }
 
-/* ---------- 消息流里的补充件 ---------- */
+/* ---------- 娑堟伅娴侀噷鐨勮ˉ鍏呬欢 ---------- */
 
 .trimmed-note {
   max-width: 900px;
@@ -534,11 +661,11 @@ pre.code.full {
   max-height: 420px;
 }
 
-/* ---------- 顶栏的「项目文件夹」 ---------- */
+/* ---------- 椤舵爮鐨勩€岄」鐩枃浠跺す銆?---------- */
 
 /*
- * 它是开始干活的前置条件,所以未设置时用橙色虚线把它从一排灰徽标里拎出来。
- * max-width 防止长路径把顶栏挤折行 —— 路径本身挂在 title 上。
+ * 瀹冩槸寮€濮嬪共娲荤殑鍓嶇疆鏉′欢,鎵€浠ユ湭璁剧疆鏃剁敤姗欒壊铏氱嚎鎶婂畠浠庝竴鎺掔伆寰芥爣閲屾嫀鍑烘潵銆?
+ * max-width 闃叉闀胯矾寰勬妸椤舵爮鎸ゆ姌琛?鈥斺€?璺緞鏈韩鎸傚湪 title 涓娿€?
  */
 .project-dir {
   max-width: 240px;
@@ -556,11 +683,11 @@ pre.code.full {
 }
 
 /*
- * 没指定项目文件夹 —— 不再是警告色。
+ * 娌℃寚瀹氶」鐩枃浠跺す 鈥斺€?涓嶅啀鏄鍛婅壊銆?
  *
- * 这里原来用 --warn + 虚线边框,因为当时"选目录"是开始对话的前置条件。
- * 现在不是了:不选就落在画布沙箱里,对话照常。所以它只是一个"当前在沙箱,
- * 想换成真项目就点我"的安静提示,长成警告的样子只会让人以为哪儿坏了。
+ * 杩欓噷鍘熸潵鐢?--warn + 铏氱嚎杈规,鍥犱负褰撴椂"閫夌洰褰?鏄紑濮嬪璇濈殑鍓嶇疆鏉′欢銆?
+ * 鐜板湪涓嶆槸浜?涓嶉€夊氨钀藉湪鐢诲竷娌欑閲?瀵硅瘽鐓у父銆傛墍浠ュ畠鍙槸涓€涓?褰撳墠鍦ㄦ矙绠?
+ * 鎯虫崲鎴愮湡椤圭洰灏辩偣鎴?鐨勫畨闈欐彁绀?闀挎垚璀﹀憡鐨勬牱瀛愬彧浼氳浜轰互涓哄摢鍎垮潖浜嗐€?
  */
 .project-dir.unset {
   color: var(--fg-2);
@@ -571,14 +698,14 @@ pre.code.full {
 }
 
 /* ============================================================
-   工作流(连线跑起来之后的运行态)
+   宸ヤ綔娴?杩炵嚎璺戣捣鏉ヤ箣鍚庣殑杩愯鎬?
    ============================================================ */
 
 /*
- * 运行条:画布**下方**的一条实心栏,不是浮层。
+ * 杩愯鏉?鐢诲竷**涓嬫柟**鐨勪竴鏉″疄蹇冩爮,涓嶆槸娴眰銆?
  *
- * 之前它绝对定位在画布上沿,把节点标题挡住了 —— 所以挪到布局流里,
- * 从此不占用画布的任何像素。上边框代替阴影来分隔两段。
+ * 涔嬪墠瀹冪粷瀵瑰畾浣嶅湪鐢诲竷涓婃部,鎶婅妭鐐规爣棰樻尅浣忎簡 鈥斺€?鎵€浠ユ尓鍒板竷灞€娴侀噷,
+ * 浠庢涓嶅崰鐢ㄧ敾甯冪殑浠讳綍鍍忕礌銆備笂杈规浠ｆ浛闃村奖鏉ュ垎闅斾袱娈点€?
  */
 .run-bar {
   position: relative;
@@ -602,7 +729,7 @@ pre.code.full {
   color: var(--err);
 }
 
-/* 环检测之类的发起失败:换行展开成一块 */
+/* 鐜娴嬩箣绫荤殑鍙戣捣澶辫触:鎹㈣灞曞紑鎴愪竴鍧?*/
 .run-bar .run-error {
   flex-basis: 100%;
   display: flex;
@@ -615,9 +742,9 @@ pre.code.full {
 }
 
 /*
- * 输入框**浮在运行条上方**,不占布局。
- * 展开它就把画布挤矮一截的话,React Flow 会跟着重算尺寸,
- * 用户正看着的节点会跳一下 —— 一个纯提示性的输入框不该有这种副作用。
+ * 杈撳叆妗?*娴湪杩愯鏉′笂鏂?*,涓嶅崰甯冨眬銆?
+ * 灞曞紑瀹冨氨鎶婄敾甯冩尋鐭竴鎴殑璇?React Flow 浼氳窡鐫€閲嶇畻灏哄,
+ * 鐢ㄦ埛姝ｇ湅鐫€鐨勮妭鐐逛細璺充竴涓?鈥斺€?涓€涓函鎻愮ず鎬х殑杈撳叆妗嗕笉璇ユ湁杩欑鍓綔鐢ㄣ€?
  */
 .run-bar .run-input {
   position: absolute;
@@ -661,7 +788,7 @@ button.ghost.on {
   border-color: var(--accent-dim);
 }
 
-/* ---------- 节点上的运行态 ---------- */
+/* ---------- 鑺傜偣涓婄殑杩愯鎬?---------- */
 
 .run-chip {
   font-size: 10.5px;
@@ -679,7 +806,7 @@ button.ghost.on {
   min-width: 0;
 }
 
-/* 选目录失败时就地显示 —— 红色,因为这是个"本该成功却没成功"的状态 */
+/* 閫夌洰褰曞け璐ユ椂灏卞湴鏄剧ず 鈥斺€?绾㈣壊,鍥犱负杩欐槸涓?鏈鎴愬姛鍗存病鎴愬姛"鐨勭姸鎬?*/
 .agent-node-cwd.err {
   color: var(--err);
   white-space: normal;
@@ -687,11 +814,11 @@ button.ghost.on {
 }
 
 /*
- * 「没指定项目文件夹」时显示的**当前落点**:沙箱目录,点一下能换成真项目。
+ * 銆屾病鎸囧畾椤圭洰鏂囦欢澶广€嶆椂鏄剧ず鐨?*褰撳墠钀界偣**:娌欑鐩綍,鐐逛竴涓嬭兘鎹㈡垚鐪熼」鐩€?
  *
- * 故意用中性色,不用 --warn。之前是橙色虚线框,读起来像"出错了/有一步没做",
- * 而实际上什么都没缺 —— agent 就落在画布沙箱里,对话照常。
- * 一个只是可选的动作,不该长成一条警告。
+ * 鏁呮剰鐢ㄤ腑鎬ц壊,涓嶇敤 --warn銆備箣鍓嶆槸姗欒壊铏氱嚎妗?璇昏捣鏉ュ儚"鍑洪敊浜?鏈変竴姝ユ病鍋?,
+ * 鑰屽疄闄呬笂浠€涔堥兘娌＄己 鈥斺€?agent 灏辫惤鍦ㄧ敾甯冩矙绠遍噷,瀵硅瘽鐓у父銆?
+ * 涓€涓彧鏄彲閫夌殑鍔ㄤ綔,涓嶈闀挎垚涓€鏉¤鍛娿€?
  */
 .node-need-cwd {
   flex: 1;
@@ -710,10 +837,10 @@ button.ghost.on {
 }
 
 /*
- * 选择器要带上 .agent-node 这个祖先。
- * theme.css 里的 `button:hover:not(:disabled)` 特异性是 (0,2,1),
- * 光写 `.node-need-cwd:hover` 只有 (0,2,0) —— 会被兜底规则盖掉,
- * 悬停时这个按钮会变成普通灰底,看着像"它坏了/点不动"。
+ * 閫夋嫨鍣ㄨ甯︿笂 .agent-node 杩欎釜绁栧厛銆?
+ * theme.css 閲岀殑 `button:hover:not(:disabled)` 鐗瑰紓鎬ф槸 (0,2,1),
+ * 鍏夊啓 `.node-need-cwd:hover` 鍙湁 (0,2,0) 鈥斺€?浼氳鍏滃簳瑙勫垯鐩栨帀,
+ * 鎮仠鏃惰繖涓寜閽細鍙樻垚鏅€氱伆搴?鐪嬬潃鍍?瀹冨潖浜?鐐逛笉鍔?銆?
  */
 .agent-node .node-need-cwd:hover {
   color: var(--fg-0);
@@ -723,17 +850,17 @@ button.ghost.on {
 
 .node-run {
   flex: none;
-  /* 比 mini 还小一号:它是节点上的次级操作,不该抢标题的注意力 */
+  /* 姣?mini 杩樺皬涓€鍙?瀹冩槸鑺傜偣涓婄殑娆＄骇鎿嶄綔,涓嶈鎶㈡爣棰樼殑娉ㄦ剰鍔?*/
   padding: 0 6px;
   line-height: 16px;
   font-size: 10px;
 }
 
 /*
- * 节点上的 ×。
+ * 鑺傜偣涓婄殑 脳銆?
  *
- * 平时压低存在感、悬停才变红:它紧挨着「▶ 跑这个节点」,而删节点没有撤销 ——
- * 一个和运行按钮同等显眼的删除键,早晚会有人点错。
+ * 骞虫椂鍘嬩綆瀛樺湪鎰熴€佹偓鍋滄墠鍙樼孩:瀹冪揣鎸ㄧ潃銆屸柖 璺戣繖涓妭鐐广€?鑰屽垹鑺傜偣娌℃湁鎾ら攢 鈥斺€?
+ * 涓€涓拰杩愯鎸夐挳鍚岀瓑鏄剧溂鐨勫垹闄ら敭,鏃╂櫄浼氭湁浜虹偣閿欍€?
  */
 .node-del {
   flex: none;
@@ -753,7 +880,7 @@ button.ghost.on {
   background: color-mix(in srgb, var(--err) 14%, transparent);
 }
 
-/* 上游是谁 —— 连线的意义在界面上的唯一线索 */
+/* 涓婃父鏄皝 鈥斺€?杩炵嚎鐨勬剰涔夊湪鐣岄潰涓婄殑鍞竴绾跨储 */
 .agent-node-up {
   margin-top: 6px;
   font-size: 10.5px;
@@ -763,7 +890,7 @@ button.ghost.on {
   text-overflow: ellipsis;
 }
 
-/* 环检测失败时高亮那条闭合路径 */
+/* 鐜娴嬪け璐ユ椂楂樹寒閭ｆ潯闂悎璺緞 */
 .react-flow__edge.edge-cycle .react-flow__edge-path {
   stroke: var(--err);
   stroke-width: 2.4;
@@ -777,7 +904,7 @@ button.ghost.on {
   }
 }
 
-/* 模板变量按钮区 */
+/* 妯℃澘鍙橀噺鎸夐挳鍖?*/
 .tpl-vars {
   display: flex;
   flex-wrap: wrap;
@@ -801,16 +928,16 @@ button.ghost.on {
 }
 
 /* ============================================================
-   nodes-v2:类型化节点
+   nodes-v2:绫诲瀷鍖栬妭鐐?
    ============================================================ */
 
 /*
- * 类型角标:项目蓝 / 串行蓝 / 并行橙 / 整合紫 / 输出绿 / 图像洋紫 /
- * 审查青 / 测试橄榄 / 文档玫红 —— 一眼可辨,两两不撞色。
+ * 绫诲瀷瑙掓爣:椤圭洰钃?/ 涓茶钃?/ 骞惰姗?/ 鏁村悎绱?/ 杈撳嚭缁?/ 鍥惧儚娲嬬传 /
+ * 瀹℃煡闈?/ 娴嬭瘯姗勬 / 鏂囨。鐜孩 鈥斺€?涓€鐪煎彲杈?涓や袱涓嶆挒鑹层€?
  *
- * 用 inline-flex 而不是默认行内盒:角标里是"图标 + 文字"两个子元素,
- * 弹性行让它们垂直居中对齐(gap 管间距),图标跟着角标自己的 color 上色
- * (SVG 是 stroke="currentColor"),所以九种颜色只需要在下面各写一处。
+ * 鐢?inline-flex 鑰屼笉鏄粯璁よ鍐呯洅:瑙掓爣閲屾槸"鍥炬爣 + 鏂囧瓧"涓や釜瀛愬厓绱?
+ * 寮规€ц璁╁畠浠瀭鐩村眳涓榻?gap 绠￠棿璺?,鍥炬爣璺熺潃瑙掓爣鑷繁鐨?color 涓婅壊
+ * (SVG 鏄?stroke="currentColor"),鎵€浠ヤ節绉嶉鑹插彧闇€瑕佸湪涓嬮潰鍚勫啓涓€澶勩€?
  */
 .node-kind-badge {
   flex: 0 0 auto;
@@ -826,7 +953,7 @@ button.ghost.on {
   color: var(--fg-1);
 }
 
-/* 角标里的图标比文字略小一点,视觉重量才和 10px 的中文相当 */
+/* 瑙掓爣閲岀殑鍥炬爣姣旀枃瀛楃暐灏忎竴鐐?瑙嗚閲嶉噺鎵嶅拰 10px 鐨勪腑鏂囩浉褰?*/
 .node-kind-badge .icon {
   opacity: 0.9;
 }
@@ -856,37 +983,37 @@ button.ghost.on {
   color: #9ae6b4;
 }
 
-/* 图像紫:比整合紫更亮的洋紫,和整合一眼能分开 */
+/* 鍥惧儚绱?姣旀暣鍚堢传鏇翠寒鐨勬磱绱?鍜屾暣鍚堜竴鐪艰兘鍒嗗紑 */
 .node-kind-badge.kind-image {
   border-color: #7a4aa5;
   color: #e0c3ff;
 }
 
-/* 审查青:冷色 = "在看、没动手",和所有会改代码的类型拉开 */
+/* 瀹℃煡闈?鍐疯壊 = "鍦ㄧ湅銆佹病鍔ㄦ墜",鍜屾墍鏈変細鏀逛唬鐮佺殑绫诲瀷鎷夊紑 */
 .node-kind-badge.kind-review {
   border-color: #2f7f8f;
   color: #8fd9e6;
 }
 
-/* 测试橄榄:它是"校验"不是"产出",用偏黄绿的中性色 */
+/* 娴嬭瘯姗勬:瀹冩槸"鏍￠獙"涓嶆槸"浜у嚭",鐢ㄥ亸榛勭豢鐨勪腑鎬ц壊 */
 .node-kind-badge.kind-test {
   border-color: #7f8f2f;
   color: #d3e58c;
 }
 
-/* 文档玫红:暖色但避开并行的橙,和整合的紫也分得开 */
+/* 鏂囨。鐜孩:鏆栬壊浣嗛伩寮€骞惰鐨勬,鍜屾暣鍚堢殑绱篃鍒嗗緱寮€ */
 .node-kind-badge.kind-doc {
   border-color: #a53f5f;
   color: #ffb3c8;
 }
 
-/* 子图蓝灰:它是"容器"不是"动作",颜色压低一档、不与任何执行类节点抢眼 */
+/* 瀛愬浘钃濈伆:瀹冩槸"瀹瑰櫒"涓嶆槸"鍔ㄤ綔",棰滆壊鍘嬩綆涓€妗ｃ€佷笉涓庝换浣曟墽琛岀被鑺傜偣鎶㈢溂 */
 .node-kind-badge.kind-subgraph {
   border-color: #5c7ab8;
   color: #b8ccec;
 }
 
-/* 生图工作区(v0.5.0):提示词薄荷(纯文本数据源,不执行)/ 采样琥珀(出图引擎)/ 图片输出沿用 output 绿 */
+/* 鐢熷浘宸ヤ綔鍖?v0.5.0):鎻愮ず璇嶈杽鑽?绾枃鏈暟鎹簮,涓嶆墽琛?/ 閲囨牱鐞ョ弨(鍑哄浘寮曟搸)/ 鍥剧墖杈撳嚭娌跨敤 output 缁?*/
 .node-kind-badge.kind-prompt {
   border-color: #2f8f7a;
   color: #8ce0cd;
@@ -898,25 +1025,25 @@ button.ghost.on {
 .agent-node.kind-prompt { border-left: 3px solid #2f8f7a; }
 .agent-node.kind-sampler { border-left: 3px solid #b8872f; }
 
-/* 游戏翠绿:与 output 的绿区分(暖一点),一眼看出"这是产出一个可玩的东西" */
+/* 娓告垙缈犵豢:涓?output 鐨勭豢鍖哄垎(鏆栦竴鐐?,涓€鐪肩湅鍑?杩欐槸浜у嚭涓€涓彲鐜╃殑涓滆タ" */
 .node-kind-badge.kind-game {
   border-color: #3fa56b;
   color: #a8f0c8;
 }
 
-/* 视频青:与 review 的青色区分(偏亮偏蓝),与图像紫也不撞 */
+/* 瑙嗛闈?涓?review 鐨勯潚鑹插尯鍒?鍋忎寒鍋忚摑),涓庡浘鍍忕传涔熶笉鎾?*/
 .node-kind-badge.kind-video {
   border-color: #2f9fa5;
   color: #a8e8ec;
 }
 
-/* 交接琥珀:传递/桥的暖色,与图像紫、软件绿都区分 */
+/* 浜ゆ帴鐞ョ弨:浼犻€?妗ョ殑鏆栬壊,涓庡浘鍍忕传銆佽蒋浠剁豢閮藉尯鍒?*/
 .node-kind-badge.kind-handoff {
   border-color: #c98a2f;
   color: #f0d2a8;
 }
 
-/* 各类型节点的左边条:图一多,光靠角标不够扫一眼分类 */
+/* 鍚勭被鍨嬭妭鐐圭殑宸﹁竟鏉?鍥句竴澶?鍏夐潬瑙掓爣涓嶅鎵竴鐪煎垎绫?*/
 .agent-node.kind-project { border-left: 3px solid #3a6ea5; }
 .agent-node.kind-serial { border-left: 3px solid #2f4a75; }
 .agent-node.kind-parallel { border-left: 3px solid #a56a2a; }
@@ -930,7 +1057,7 @@ button.ghost.on {
 .agent-node.kind-video { border-left: 3px solid #2f9fa5; }
 .agent-node.kind-handoff { border-left: 3px solid #c98a2f; }
 .agent-node.kind-subgraph { border-left: 3px solid #5c7ab8; }
-/* v0.6.1 工程化 agent 编排:智能体(循环)青绿 / 路由(分支)玫红 */
+/* v0.6.1 宸ョ▼鍖?agent 缂栨帓:鏅鸿兘浣?寰幆)闈掔豢 / 璺敱(鍒嗘敮)鐜孩 */
 .node-kind-badge.kind-agent {
   border-color: #2f9fa5;
   color: #a8e4ec;
@@ -941,14 +1068,14 @@ button.ghost.on {
 }
 .agent-node.kind-agent { border-left: 3px solid #2f9fa5; }
 .agent-node.kind-router { border-left: 3px solid #b34a7a; }
-/* v0.6.2 可视化图形:图表节点(琥珀) */
+/* v0.6.2 鍙鍖栧浘褰?鍥捐〃鑺傜偣(鐞ョ弨) */
 .node-kind-badge.kind-chart {
   border-color: #c99a2f;
   color: #f2d68a;
 }
 .agent-node.kind-chart { border-left: 3px solid #c99a2f; }
 
-/* ---------- 子图:配置面板里的内部节点清单 ---------- */
+/* ---------- 瀛愬浘:閰嶇疆闈㈡澘閲岀殑鍐呴儴鑺傜偣娓呭崟 ---------- */
 .subgraph-list {
   list-style: none;
   margin: 4px 0 8px;
@@ -974,9 +1101,9 @@ button.ghost.on {
   white-space: nowrap;
 }
 
-/* ---------- 数据探针(悬停边/节点,浮出该节点的产出预览)---------- */
-/* fixed + 高 z-index:它挂在指针旁边,不属于画布坐标系;pointer-events 关掉,
-   免得浮层本身把节点的 mouseleave 触发掉、探针一闪一闪 */
+/* ---------- 鏁版嵁鎺㈤拡(鎮仠杈?鑺傜偣,娴嚭璇ヨ妭鐐圭殑浜у嚭棰勮)---------- */
+/* fixed + 楂?z-index:瀹冩寕鍦ㄦ寚閽堟梺杈?涓嶅睘浜庣敾甯冨潗鏍囩郴;pointer-events 鍏虫帀,
+   鍏嶅緱娴眰鏈韩鎶婅妭鐐圭殑 mouseleave 瑙﹀彂鎺夈€佹帰閽堜竴闂竴闂?*/
 .probe-pop {
   position: fixed;
   z-index: 60;
@@ -1034,7 +1161,7 @@ button.ghost.on {
   color: var(--fg-2);
 }
 
-/* ---------- 图像节点:缩略图网格(≤6 张 +N / 空态 / 生成中) ---------- */
+/* ---------- 鍥惧儚鑺傜偣:缂╃暐鍥剧綉鏍?鈮? 寮?+N / 绌烘€?/ 鐢熸垚涓? ---------- */
 .image-thumbs {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1057,7 +1184,7 @@ button.ghost.on {
   display: block;
 }
 
-/* 占位:正在按需取这张图 */
+/* 鍗犱綅:姝ｅ湪鎸夐渶鍙栬繖寮犲浘 */
 .image-thumb.pending {
   background: linear-gradient(90deg, var(--bg-1), var(--bg-2), var(--bg-1));
   opacity: 0.6;
@@ -1071,7 +1198,7 @@ button.ghost.on {
   color: var(--fg-2);
 }
 
-/* 空态(未运行"还没有图片" / 运行中"生成中…") */
+/* 绌烘€?鏈繍琛?杩樻病鏈夊浘鐗? / 杩愯涓?鐢熸垚涓€?) */
 .image-thumbs.empty {
   display: block;
   color: var(--fg-2);
@@ -1082,7 +1209,7 @@ button.ghost.on {
   border-radius: var(--radius-sm);
 }
 
-/* provider 单选行(本地命令 / HTTP) */
+/* provider 鍗曢€夎(鏈湴鍛戒护 / HTTP) */
 .image-config-provider {
   display: flex;
   gap: 8px;
@@ -1090,7 +1217,7 @@ button.ghost.on {
   flex-wrap: wrap;
 }
 
-/* 节点上的第二行元信息(brief / 汇入数 / 输出目录):比路径行再弱一档 */
+/* 鑺傜偣涓婄殑绗簩琛屽厓淇℃伅(brief / 姹囧叆鏁?/ 杈撳嚭鐩綍):姣旇矾寰勮鍐嶅急涓€妗?*/
 .agent-node-brief {
   display: block;
   font-family: var(--ui, inherit);
@@ -1100,7 +1227,7 @@ button.ghost.on {
   text-overflow: ellipsis;
 }
 
-/* 软提示(并行冲突 / 汇入不足):橙色但不阻断 —— 提示归提示,不吓唬人 */
+/* 杞彁绀?骞惰鍐茬獊 / 姹囧叆涓嶈冻):姗欒壊浣嗕笉闃绘柇 鈥斺€?鎻愮ず褰掓彁绀?涓嶅悡鍞汉 */
 .node-soft-hint {
   display: block;
   font-size: 10px;
@@ -1110,7 +1237,7 @@ button.ghost.on {
   text-overflow: ellipsis;
 }
 
-/* 输出节点的「开始打包」:占满 meta 行,和 agent 的 ▶ 并存(它是带文字的显眼版) */
+/* 杈撳嚭鑺傜偣鐨勩€屽紑濮嬫墦鍖呫€?鍗犳弧 meta 琛?鍜?agent 鐨?鈻?骞跺瓨(瀹冩槸甯︽枃瀛楃殑鏄剧溂鐗? */
 .agent-node .node-pack {
   flex: 1;
   border-color: var(--border-strong);
@@ -1118,11 +1245,11 @@ button.ghost.on {
 }
 
 /*
- * 测试节点的「开始测试」。
+ * 娴嬭瘯鑺傜偣鐨勩€屽紑濮嬫祴璇曘€嶃€?
  *
- * 和「开始打包」同样是**就地触发一次内置动作**的显眼按钮,但不用 flex:1 占满
- * 整行 —— 测试节点的 meta 行上还有命令原文与超时两个信息要放,
- * 按钮把整行吃掉的话那两项就没地方了。
+ * 鍜屻€屽紑濮嬫墦鍖呫€嶅悓鏍锋槸**灏卞湴瑙﹀彂涓€娆″唴缃姩浣?*鐨勬樉鐪兼寜閽?浣嗕笉鐢?flex:1 鍗犳弧
+ * 鏁磋 鈥斺€?娴嬭瘯鑺傜偣鐨?meta 琛屼笂杩樻湁鍛戒护鍘熸枃涓庤秴鏃朵袱涓俊鎭鏀?
+ * 鎸夐挳鎶婃暣琛屽悆鎺夌殑璇濋偅涓ら」灏辨病鍦版柟浜嗐€?
  */
 .agent-node .node-run-test {
   flex: none;
@@ -1131,19 +1258,19 @@ button.ghost.on {
   padding: 3px 9px;
 }
 
-/* 测试节点的命令没填时,那一格要说"未配置"而不是留一片空白 */
+/* 娴嬭瘯鑺傜偣鐨勫懡浠ゆ病濉椂,閭ｄ竴鏍艰璇?鏈厤缃?鑰屼笉鏄暀涓€鐗囩┖鐧?*/
 .agent-node-brief.unset {
   color: #e2a95c;
   font-style: italic;
 }
 
-/* RunBar 的「输入」按钮上那个"有未提交输入"的小圆点 */
+/* RunBar 鐨勩€岃緭鍏ャ€嶆寜閽笂閭ｄ釜"鏈夋湭鎻愪氦杈撳叆"鐨勫皬鍦嗙偣 */
 .run-bar .dirty-dot {
   color: var(--accent);
   margin-left: 1px;
 }
 
-/* ---------- 添加节点类型菜单 ---------- */
+/* ---------- 娣诲姞鑺傜偣绫诲瀷鑿滃崟 ---------- */
 
 .canvas-tools .add-wrap {
   position: relative;
@@ -1180,11 +1307,11 @@ button.ghost.on {
 }
 
 /*
- * 菜单项被聚焦(键盘 ↑↓ 移动 / 打开时落在第一项)时的高亮。
+ * 鑿滃崟椤硅鑱氱劍(閿洏 鈫戔啌 绉诲姩 / 鎵撳紑鏃惰惤鍦ㄧ涓€椤?鏃剁殑楂樹寒銆?
  *
- * 特意用 :focus 而不是 :focus-visible —— 这里的焦点是**程序化**给的,
- * 浏览器对这种情况是否算"可见焦点"判断不一,用 :focus 才能保证
- * 用户一定看得见"回车会选中哪一项"。
+ * 鐗规剰鐢?:focus 鑰屼笉鏄?:focus-visible 鈥斺€?杩欓噷鐨勭劍鐐规槸**绋嬪簭鍖?*缁欑殑,
+ * 娴忚鍣ㄥ杩欑鎯呭喌鏄惁绠?鍙鐒︾偣"鍒ゆ柇涓嶄竴,鐢?:focus 鎵嶈兘淇濊瘉
+ * 鐢ㄦ埛涓€瀹氱湅寰楄"鍥炶溅浼氶€変腑鍝竴椤?銆?
  */
 .canvas-tools .add-menu button:focus {
   background: var(--bg-3);
@@ -1192,7 +1319,7 @@ button.ghost.on {
   outline: none;
 }
 
-/* 序号徽标:既是提示,也是数字键直选的依据 */
+/* 搴忓彿寰芥爣:鏃㈡槸鎻愮ず,涔熸槸鏁板瓧閿洿閫夌殑渚濇嵁 */
 .add-idx {
   flex: 0 0 auto;
   width: 15px;
@@ -1213,7 +1340,7 @@ button.ghost.on {
   border-color: var(--accent-dim);
 }
 
-/* ---------- 工作流菜单(v0.6.0):导出 / 导入 / 模板 ---------- */
+/* ---------- 宸ヤ綔娴佽彍鍗?v0.6.0):瀵煎嚭 / 瀵煎叆 / 妯℃澘 ---------- */
 
 .canvas-tools .wf-wrap {
   position: relative;
@@ -1271,9 +1398,9 @@ button.ghost.on {
 }
 
 /*
- * 菜单项的类型图标。固定 16px 的槽位让九行的文字左边缘严格对齐 ——
- * 没有它的话"项目/串行/并行"行的文字会比"整合/输出"行左右错动几个像素。
- * 颜色与画布上角标的完全同源(同一套色值),菜单里认得的颜色在画布上还认得。
+ * 鑿滃崟椤圭殑绫诲瀷鍥炬爣銆傚浐瀹?16px 鐨勬Ы浣嶈涔濊鐨勬枃瀛楀乏杈圭紭涓ユ牸瀵归綈 鈥斺€?
+ * 娌℃湁瀹冪殑璇?椤圭洰/涓茶/骞惰"琛岀殑鏂囧瓧浼氭瘮"鏁村悎/杈撳嚭"琛屽乏鍙抽敊鍔ㄥ嚑涓儚绱犮€?
+ * 棰滆壊涓庣敾甯冧笂瑙掓爣鐨勫畬鍏ㄥ悓婧?鍚屼竴濂楄壊鍊?,鑿滃崟閲岃寰楃殑棰滆壊鍦ㄧ敾甯冧笂杩樿寰椼€?
  */
 .add-icon {
   flex: 0 0 16px;
@@ -1300,7 +1427,7 @@ button.ghost.on {
   white-space: nowrap;
 }
 
-/* 菜单底部的按键说明 */
+/* 鑿滃崟搴曢儴鐨勬寜閿鏄?*/
 .add-foot {
   display: flex;
   align-items: center;
@@ -1313,7 +1440,7 @@ button.ghost.on {
   background: var(--bg-1);
 }
 
-/* ---------- RunBar 右侧常驻的键盘提示 ---------- */
+/* ---------- RunBar 鍙充晶甯搁┗鐨勯敭鐩樻彁绀?---------- */
 
 .run-bar .run-keys {
   margin-left: auto;
@@ -1329,13 +1456,13 @@ button.ghost.on {
   margin: 0 6px 0 3px;
 }
 
-/* ---------- 快捷键帮助浮层 ---------- */
+/* ---------- 蹇嵎閿府鍔╂诞灞?---------- */
 
 /*
- * 居中弹窗而不是右侧抽屉。
- * 设置/技能是"要动手干活"的地方(所以抽屉式,不挡画布);
- * 快捷键表是"看一眼就关"的参考信息,居中最省眼睛。
- * 遮罩加一层轻模糊:底下的画布还在,但不再和表格的字抢注意力。
+ * 灞呬腑寮圭獥鑰屼笉鏄彸渚ф娊灞夈€?
+ * 璁剧疆/鎶€鑳芥槸"瑕佸姩鎵嬪共娲?鐨勫湴鏂?鎵€浠ユ娊灞夊紡,涓嶆尅鐢诲竷);
+ * 蹇嵎閿〃鏄?鐪嬩竴鐪煎氨鍏?鐨勫弬鑰冧俊鎭?灞呬腑鏈€鐪佺溂鐫涖€?
+ * 閬僵鍔犱竴灞傝交妯＄硦:搴曚笅鐨勭敾甯冭繕鍦?浣嗕笉鍐嶅拰琛ㄦ牸鐨勫瓧鎶㈡敞鎰忓姏銆?
  */
 .sc-overlay {
   position: fixed;
@@ -1388,7 +1515,7 @@ button.ghost.on {
   color: var(--fg-2);
 }
 
-/* 关闭:一个图标就够,不跟标题抢位置 */
+/* 鍏抽棴:涓€涓浘鏍囧氨澶?涓嶈窡鏍囬鎶綅缃?*/
 .sc-close {
   flex: none;
   padding: 4px 6px;
@@ -1403,7 +1530,7 @@ button.ghost.on {
   border-color: var(--border-strong);
 }
 
-/* ---------- 搜索条 ---------- */
+/* ---------- 鎼滅储鏉?---------- */
 
 .sc-search {
   display: flex;
@@ -1436,7 +1563,7 @@ button.ghost.on {
   font-size: 12.5px;
 }
 
-/* 焦点环交给外层 .sc-search 的 :focus-within,输入框自己不再多画一圈 */
+/* 鐒︾偣鐜氦缁欏灞?.sc-search 鐨?:focus-within,杈撳叆妗嗚嚜宸变笉鍐嶅鐢讳竴鍦?*/
 .sc-search input:focus-visible {
   outline: none;
 }
@@ -1468,16 +1595,16 @@ button.ghost.on {
   font-size: 12.5px;
 }
 
-/* ---------- 分组 ---------- */
+/* ---------- 鍒嗙粍 ---------- */
 
 .sc-group {
   margin-top: 16px;
 }
 
 /*
- * 分组标题:图标 + 名称 + 条数。
- * 条数收在右端的胶囊里(而不是写成"(3)")—— 一列数字右对齐在一起时,
- * 胶囊比括号好扫,顺带给标题一条视觉上的终点。
+ * 鍒嗙粍鏍囬:鍥炬爣 + 鍚嶇О + 鏉℃暟銆?
+ * 鏉℃暟鏀跺湪鍙崇鐨勮兌鍥婇噷(鑰屼笉鏄啓鎴?(3)")鈥斺€?涓€鍒楁暟瀛楀彸瀵归綈鍦ㄤ竴璧锋椂,
+ * 鑳跺泭姣旀嫭鍙峰ソ鎵?椤哄甫缁欐爣棰樹竴鏉¤瑙変笂鐨勭粓鐐广€?
  */
 .sc-group h3 {
   display: flex;
@@ -1510,23 +1637,23 @@ button.ghost.on {
 }
 
 /*
- * 单列到底(不是两列密排)。
+ * 鍗曞垪鍒板簳(涓嶆槸涓ゅ垪瀵嗘帓)銆?
  *
- * 两列的好处是一屏看得完,代价是"按键"和"说明"的对应关系要靠眼睛横着追,
- * 相邻两列还会互相干扰。单列 + 分组标题之后,扫读是纵向的 —— 一行是一条,
- * 内容多也没关系,浮层自己有滚动。
+ * 涓ゅ垪鐨勫ソ澶勬槸涓€灞忕湅寰楀畬,浠ｄ环鏄?鎸夐敭"鍜?璇存槑"鐨勫搴斿叧绯昏闈犵溂鐫涙í鐫€杩?
+ * 鐩搁偦涓ゅ垪杩樹細浜掔浉骞叉壈銆傚崟鍒?+ 鍒嗙粍鏍囬涔嬪悗,鎵鏄旱鍚戠殑 鈥斺€?涓€琛屾槸涓€鏉?
+ * 鍐呭澶氫篃娌″叧绯?娴眰鑷繁鏈夋粴鍔ㄣ€?
  */
 .sc-list {
   display: flex;
   flex-direction: column;
 }
 
-/* 行:按键列定宽 → 所有"说明"的左边缘严格对齐,扫读时不必重新找起点 */
+/* 琛?鎸夐敭鍒楀畾瀹?鈫?鎵€鏈?璇存槑"鐨勫乏杈圭紭涓ユ牸瀵归綈,鎵鏃朵笉蹇呴噸鏂版壘璧风偣 */
 .sc-item {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  /* 负外边距 + 等量内边距:hover 的高亮块比文字宽出一点,像一整行而不是一个文本框 */
+  /* 璐熷杈硅窛 + 绛夐噺鍐呰竟璺?hover 鐨勯珮浜潡姣旀枃瀛楀鍑轰竴鐐?鍍忎竴鏁磋鑰屼笉鏄竴涓枃鏈 */
   margin: 0 -8px;
   padding: 6px 8px;
   min-width: 0;
@@ -1552,8 +1679,8 @@ button.ghost.on {
 }
 
 /*
- * 鼠标手势那一列的"按键":它不是键帽(没有对应的键可以按),
- * 所以是「图标 + 文字」而不是 kbd —— 做成键帽的样子会让人以为真能按。
+ * 榧犳爣鎵嬪娍閭ｄ竴鍒楃殑"鎸夐敭":瀹冧笉鏄敭甯?娌℃湁瀵瑰簲鐨勯敭鍙互鎸?,
+ * 鎵€浠ユ槸銆屽浘鏍?+ 鏂囧瓧銆嶈€屼笉鏄?kbd 鈥斺€?鍋氭垚閿附鐨勬牱瀛愪細璁╀汉浠ヤ负鐪熻兘鎸夈€?
  */
 .sc-gesture {
   display: inline-flex;
@@ -1590,7 +1717,7 @@ button.ghost.on {
   color: var(--fg-2);
 }
 
-/* ---------- RunBar 校验提示 ---------- */
+/* ---------- RunBar 鏍￠獙鎻愮ず ---------- */
 
 .run-bar .run-warns-toggle {
   color: #e2a95c;
@@ -1615,7 +1742,7 @@ button.ghost.on {
   color: var(--fg-1);
 }
 
-/* 图标的行高比文字小,不往上提一点会显得"贴着头顶" */
+/* 鍥炬爣鐨勮楂樻瘮鏂囧瓧灏?涓嶅線涓婃彁涓€鐐逛細鏄惧緱"璐寸潃澶撮《" */
 .run-bar .run-warn .icon {
   margin-top: 3px;
   opacity: 0.85;
@@ -1625,11 +1752,11 @@ button.ghost.on {
   color: var(--err, #e5726f);
 }
 
-/* ---------- RunBar 失败原因 ---------- */
+/* ---------- RunBar 澶辫触鍘熷洜 ---------- */
 
 /*
- * 与 run-warns 同一套壳子,但语义更重:左边框压一道红,
- * 让它在视觉上就与"运行前的建议"区分开 —— 前者可以无视,后者不处理就白跑。
+ * 涓?run-warns 鍚屼竴濂楀３瀛?浣嗚涔夋洿閲?宸﹁竟妗嗗帇涓€閬撶孩,
+ * 璁╁畠鍦ㄨ瑙変笂灏变笌"杩愯鍓嶇殑寤鸿"鍖哄垎寮€ 鈥斺€?鍓嶈€呭彲浠ユ棤瑙?鍚庤€呬笉澶勭悊灏辩櫧璺戙€?
  */
 .run-bar .run-fails-toggle {
   color: var(--err, #e5726f);
@@ -1660,7 +1787,7 @@ button.ghost.on {
   opacity: 0.85;
 }
 
-/* 节点名定宽一段:原因长短不一时,原因仍然从同一列起排,不会左右乱跳 */
+/* 鑺傜偣鍚嶅畾瀹戒竴娈?鍘熷洜闀跨煭涓嶄竴鏃?鍘熷洜浠嶇劧浠庡悓涓€鍒楄捣鎺?涓嶄細宸﹀彸涔辫烦 */
 .run-bar .run-fail-title {
   flex: 0 0 auto;
   max-width: 140px;
@@ -1675,7 +1802,7 @@ button.ghost.on {
   color: var(--fg-1);
 }
 
-/* ---------- ProjectDirButton(readonly 诊断项) ---------- */
+/* ---------- ProjectDirButton(readonly 璇婃柇椤? ---------- */
 
 .project-dir.readonly {
   cursor: default;
@@ -1683,13 +1810,14 @@ button.ghost.on {
 }
 
 .project-dir.readonly.deprecated {
-  /* deprecated 兜底:比权威来源弱一档,提示"它不是该配置的地方" */
+  /* deprecated 鍏滃簳:姣旀潈濞佹潵婧愬急涓€妗?鎻愮ず"瀹冧笉鏄閰嶇疆鐨勫湴鏂? */
   border-style: dashed;
   color: var(--fg-2);
 }
 
-/* 工具条上的错误提示(非法连线被拒) */
+/* 宸ュ叿鏉′笂鐨勯敊璇彁绀?闈炴硶杩炵嚎琚嫆) */
 .hint-inline.err {
   color: var(--err, #e5726f);
   border-color: var(--err, #e5726f);
 }
+

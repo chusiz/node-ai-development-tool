@@ -145,6 +145,10 @@ export const CH = {
   localSdStatus: 'localSd:status',
   localSdStart: 'localSd:start',
   localSdStop: 'localSd:stop',
+  /** 产物预览(v0.6.4):web → 起本地静态服务并打开;exe/game → 直接启动/打开所在目录 */
+  previewOutput: 'output:preview',
+  /** 生成代码安全审计(v0.6.4):依赖审计 + 密钥泄露检测,返回结构化报告 */
+  auditProject: 'audit:project',
 } as const
 
 /** 本地生图服务状态(v0.4.2)。供渲染端「本地服务」状态卡显示 */
@@ -165,8 +169,20 @@ export interface LocalSdStatus {
   checkpoint: string | null
 }
 
-/** 主进程 → 渲染进程,单向推送 */
-export const EV = {
+/** v0.6.4 安全审计:生成代码的密钥泄露扫描 + npm audit 结果 */
+export interface AuditSecretHit {
+  file: string
+  pattern: string
+  snippet: string
+}
+export interface AuditReport {
+  ok: boolean
+  secrets: AuditSecretHit[]
+  npmAudit: { vulnerabilities: number; critical: number; high: number } | null
+  summary: string
+}
+
+/** 主进程 → 渲染进程,单向推送 */export const EV = {
   /**
    * 日志批次 —— 取代原来的 session:events。
    *
@@ -668,6 +684,14 @@ export interface RendererApi {
   shell: {
     /** 在资源管理器里打开这个路径 */
     openPath(path: string): Promise<Envelope<{ opened: true }>>
+  }
+  /** v0.6.4 产物预览:web → 起本地静态服务并打开;exe → 直接启动;game → 打开所在目录 */
+  preview: {
+    output(dir: string, target: string): Promise<Envelope<{ opened: true; url?: string }>>
+  }
+  /** v0.6.4 生成代码安全审计:依赖审计 + 密钥泄露检测 */
+  audit: {
+    project(dir: string): Promise<Envelope<AuditReport>>
   }
   settings: {
     get(): Promise<Envelope<SettingsPayload>>

@@ -1,6 +1,6 @@
 {
   "name": "chusiz",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "private": true,
   "description": "节点式 AI 软件/应用/游戏制作工作台:本地模型直出生图、交接节点、Electron exe 打包、视频理解",
   "productName": "Node AI Development Tool",
@@ -20,6 +20,7 @@
     "fullflow": "esbuild scripts/fullflow.ts --bundle --platform=node --format=cjs --target=node22 --external:electron --outfile=.tmp/fullflow.cjs --log-level=warning && node .tmp/fullflow.cjs",
     "verify": "npm run typecheck && npm run e2e",
     "probe": "electron-vite build && node scripts/probe.mjs",
+    "mcp": "esbuild src/main/mcp/standalone.ts --bundle --platform=node --format=cjs --target=node22 --external:electron --outfile=.tmp/mcp-standalone.cjs --log-level=warning && node .tmp/mcp-standalone.cjs",
     "icon": "node scripts/makeIcon.mjs",
     "dist": "npm run icon && electron-vite build && electron-builder --win",
     "dist:portable": "npm run dist && node scripts/portable.mjs"

@@ -17,6 +17,7 @@ import { injectOne, buildVars, type SpillContext } from './inputs'
 import type { BuiltinActionRequest, BuiltinActionResult } from './builtinAction'
 import { plannedCwd } from '../startSession'
 import { buildIndex, CycleError, normalizeEdges, ancestors, descendants, type GraphIndex } from './graph'
+import { findLatestRunState } from './runLog'
 import type { FailureVerdict, SessionOutcome } from '../../shared/failure'
 
 /**
@@ -181,6 +182,8 @@ interface ActiveRun {
 
 export class WorkflowRunner {
   private runs = new Map<string, ActiveRun>()
+  /** v0.6.4 增量执行:上一次成功运行的基线(输入指纹相同 → 复用产出) */
+  private lastState: RunState | null = null
 
   constructor(private readonly env: RunnerEnv) {}
 
@@ -200,6 +203,9 @@ export class WorkflowRunner {
   async run(spec: WorkflowSpec): Promise<RunState> {
     const nodeById = new Map(spec.nodes.map((n) => [n.id, n]))
     const edges = normalizeEdges([...nodeById.keys()], spec.edges)
+
+    // v0.6.4 增量执行基线:同画布最近一次成功运行(读失败 = null,退化为全量执行)
+    this.lastState = await findLatestRunState(spec.canvasId).catch(() => null)
 
     /*
      * ① 运行前图校验(V1..V8)。全部 warn(不阻断,M6 决策),逐条进节点日志
@@ -265,6 +271,18 @@ export class WorkflowRunner {
 
     try {
       await this.schedule(run)
+      /*
+       * v0.6.4 增量执行:把每个**成功**内置节点的输入指纹写进运行态落盘,
+       * 下一次 run 拿它做"输入未变 → 复用产出"判定。失败/取消不写
+       * (上一轮失败不该成为复用基线)。
+       */
+      for (const id of active) {
+        const n = state.nodes[id]
+        if (n && n.status === 'done' && !n.inputHash) {
+          const sp = run.spec.nodes.find((s) => s.id === id)
+          if (sp && sp.executor === 'builtin') n.inputHash = this.inputHashOf(run, sp) ?? undefined
+        }
+      }
       if (run.cancelled) state.status = 'cancelled'
       else state.status = Object.values(state.nodes).some((n) => n.status === 'failed')
         ? 'failed'
@@ -703,6 +721,45 @@ export class WorkflowRunner {
   }
 
   /**
+   * v0.6.4 增量执行:算一个内置节点的**输入指纹**。
+   *
+   * 指纹 = 上游产出摘要 + 本节点配置(动作 + 相关参数)。配置变了 / 上游产出
+   * 变了,指纹就变,下次运行真实执行;都没变则复用上次产出(零成本)。
+   * 只对 builtin 节点有意义(会话节点每次都要真实对话,不参与增量)。
+   */
+  private inputHashOf(run: ActiveRun, spec: WorkflowNodeSpec): string | null {
+    if (spec.executor !== 'builtin') return null
+    const ups = run.spec.edges
+      .filter((e) => e.target === spec.id)
+      .map((e) => {
+        const out = run.outputs.get(e.source)
+        return `${e.source}:${out !== undefined ? String(out).slice(0, 2000) : ''}`
+      })
+      .sort()
+      .join('\n')
+    const cfg = JSON.stringify({
+      action: spec.action,
+      buildTarget: spec.buildTarget,
+      buildOptions: spec.buildOptions,
+      imageParams: spec.imageParams,
+      imageProvider: spec.imageProvider,
+      videoParams: spec.videoParams,
+      chartParams: spec.chartParams,
+      promptText: spec.promptText,
+      negativeText: spec.negativeText,
+      testCommand: spec.testCommand,
+      testTimeoutSec: spec.testTimeoutSec,
+      handoffNote: spec.handoffNote,
+    })
+    const raw = `${ups}\n${cfg}`
+    let h = 0
+    for (let i = 0; i < raw.length; i++) {
+      h = (h * 31 + raw.charCodeAt(i)) | 0
+    }
+    return String(h)
+  }
+
+  /**
    * router 节点(v0.6.1):LLM 看完上游成果后**选一条出边分支**激活。
    *
    * 一轮会话 → parseRouterPick 解析(编号/标签/兜底全激活)→ 记录到
@@ -778,6 +835,32 @@ export class WorkflowRunner {
     this.setNode(run, spec.id, { status: 'running', attempts: 1, startedAt: Date.now() })
     // 失败文案前缀(打包/出图…),仅用于日志可读性;未登记回落"执行"(语义不变)
     const failLabel = ACTION_FAIL_LABEL[spec.action ?? ''] ?? '执行'
+
+    /*
+     * v0.6.4 增量执行:输入未变且上次成功 → 复用上次产出,不真实执行。
+     * 只对**内置动作节点**(不耗 token 的重操作:打包/出图/测试/图表/python…);
+     * 会话节点(agent)每次都要真实对话,不参与。
+     */
+    const inputHash = this.inputHashOf(run, spec)
+    const prev = this.lastState?.nodes[spec.id]
+    if (inputHash && prev && prev.status === 'done' && prev.inputHash === inputHash) {
+      run.outputs.set(spec.id, prev.outputPreview ?? '')
+      if (Array.isArray(prev.artifacts)) {
+        for (const a of prev.artifacts) this.env.notice(spec.id, 'info', `[增量复用] ${a}`)
+      }
+      this.env.notice(spec.id, 'info', '输入未变,复用上次产出(增量执行)')
+      this.setNode(run, spec.id, {
+        status: 'done',
+        endedAt: Date.now(),
+        inputHash,
+        reused: true,
+        outputChars: prev.outputChars,
+        outputPreview: prev.outputPreview,
+        artifacts: prev.artifacts,
+      })
+      return
+    }
+
     try {
       // 图像节点 / 采样出图 / 图表:先做**阶段一**占位符展开(调度侧才拿得到上游产出与依赖关系)
       let prompt: string | undefined
@@ -804,6 +887,7 @@ export class WorkflowRunner {
         negativeText: spec.negativeText,
         testCommand: spec.testCommand,
         testTimeoutSec: spec.testTimeoutSec,
+        pythonParams: spec.pythonParams,
         // 打包/出图/视频分析/测试日志一行行冒泡到节点日志(RunBar 已订阅)
         onProgress: (line) => this.env.notice(spec.id, 'info', line),
       })
@@ -875,13 +959,15 @@ export class WorkflowRunner {
         spec.action === 'handoff' ||
         spec.action === 'image-output' ||
         spec.action === 'noop' ||
-        spec.action === 'chart'
+        spec.action === 'chart' ||
+        spec.action === 'python'
       ) {
         /*
          * 交接节点的产出 = 素材清单文本(不是文件列表):必须进 outputs,
          * 下游 {{prev}} / {{node:<id>}} 取到的就是"有哪些素材、在哪、干什么用",
          * AI 制作/打包时按相对路径直接引用这些图片。
          * 图表节点同款:产出 = 相对路径 + 说明文本,下游可引用该 SVG。
+         * Python 节点同款(v0.6.4):产出 = stdout 文本,下游直接消费。
          */
         const handoffOut = res.handoffText ?? `[交接完成] ${res.log.slice(-2000)}`
         run.outputs.set(spec.id, handoffOut)

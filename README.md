@@ -151,3 +151,14 @@ All contributions welcome: issues, bug fixes, new node types, docs. See [CONTRIB
 **This project is waiting for the right person to take it further** — see [ROADMAP.md](./docs/ROADMAP.md) for the full plan (engineering trust → platform capability → ecosystem). Picked highlights: node plugin SDK, Human Approval / Policy / Secrets Vault / Rollback nodes, budget & cost control, parallel-agent voting, release & deploy pipeline, and an "AI software factory" quality-gate loop.
 
 v0.6.3 (2026-10-08): cross-platform e2e & CLI locator, e2e SKIP instead of crash, debug-log cleanup, version unification (tag `v0.6.3` + changelog), 3 golden workflow templates (enterprise AI coding / game-art pipeline / multi-agent competition), roadmap doc.
+
+v0.6.4 (2026-10-08): **engineering hardening from community feedback + platform capabilities**
+- Node-level error visualization: failed nodes show a one-click `fix` button that creates a connected repair node (Auto-Fix entry).
+- In-app artifact preview: web opens in browser, exe launches directly, game opens its folder — no more hunting in the filesystem.
+- Security audit before packaging: secret scan (sk- / AKIA / github_pat / PRIVATE KEY) + `npm audit`, report written into `assets/generated/audit/audit-report.json`.
+- Incremental execution: unchanged inputs reuse the previous run's output (builtin nodes only; input-hash based, zero-cost re-runs).
+- MCP Server (`npm run mcp`): Claude / Cursor can orchestrate workflows headlessly via JSON-RPC over stdio (`list_nodes` / `run_workflow` / `get_node_result`) using the exact same scheduler as the GUI.
+- Python node: run arbitrary scripts in the project dir (subprocess, cwd-locked, stdout handed to downstream) — reuse the AI/ML ecosystem without consuming tokens.
+- Startup lazy-loading: packager / imagegen / videogen / chartgen / python executors are dynamically imported on first use, so the canvas becomes interactive faster.
+- Governance: CONTRIBUTING / CODE_OF_CONDUCT / SECURITY, ARCHITECTURE & PLUGIN docs, plus an interactive 5-step first-run guide.
+- Docs: [ARCHITECTURE.md](./docs/ARCHITECTURE.md) · [PLUGIN.md](./docs/PLUGIN.md) · [ROADMAP.md](./docs/ROADMAP.md)

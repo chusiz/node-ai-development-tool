@@ -108,6 +108,14 @@ const api: RendererApi = {
   shell: {
     openPath: (p: string) => ipcRenderer.invoke(CH.shellOpenPath, p),
   },
+  // v0.6.4 产物预览:web → 起本地静态服务并打开;exe → 直接启动;game → 打开所在目录
+  preview: {
+    output: (dir: string, target: string) => ipcRenderer.invoke(CH.previewOutput, dir, target),
+  },
+  // v0.6.4 安全审计:依赖审计 + 密钥泄露检测
+  audit: {
+    project: (dir: string) => ipcRenderer.invoke(CH.auditProject, dir),
+  },
   settings: {
     get: () => ipcRenderer.invoke(CH.settingsGet),
     set: (next) => ipcRenderer.invoke(CH.settingsSet, next),

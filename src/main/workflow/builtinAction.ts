@@ -4,6 +4,7 @@ import type {
   ChartParams,
   ImageParams,
   ImageProviderConfig,
+  PythonParams,
   VideoParams,
 } from '../../shared/canvas'
 
@@ -68,6 +69,10 @@ export interface BuiltinActionRequest {
   // ---- chart 专属(v0.6.2 可视化图形制作)----
   /** 图表参数:类型 / 标题 / 画布尺寸。数据本体走 `prompt`(已展开占位符) */
   chartParams?: ChartParams
+
+  // ---- python 专属(v0.6.4 多语言节点)----
+  /** Python 执行参数:脚本本体 / 脚本文件 / 命令行参数 / python 路径 */
+  pythonParams?: PythonParams
 
   /** 进度/日志要能冒泡到 RunBar / 节点日志(packager 与 imagegen 都走它) */
   onProgress?(line: string): void

@@ -150,6 +150,34 @@ export function NodeShell({
   const runBusy = status === 'running' || status === 'queued' || status === 'waiting'
 
   /*
+   * v0.6.4 一键送修(改进建议第二条"节点级错误可视化"):
+   * 节点出错时,徽标旁出现「送修」按钮 —— 把错误摘要自动带进一个新加的
+   * 功能节点(标题 = 修复:xxx),并把它接到出错节点下游,用户点运行即修。
+   * 不自动运行:AI 修改代码需要用户看过一眼再放行。
+   */
+  const lastError = useRuntimeStore((s) => {
+    const items = s.runtimes[id]?.items
+    if (!items) return null
+    for (let i = items.length - 1; i >= 0; i--) {
+      const rec = items[i].rec
+      if (rec.t === 'event' && rec.ev.k === 'error') return rec.ev.message
+      if (rec.t === 'notice' && rec.level === 'error') return rec.text
+    }
+    return null
+  })
+  const sendToFix = (e: ReactMouseEvent): void => {
+    e.stopPropagation()
+    const st = useGraphStore.getState()
+    const at = { x: 60, y: 60 }
+    const fixId = st.addNode(at, 'feature', {
+      title: `修复:${title.length > 12 ? title.slice(0, 12) + '…' : title}`,
+    })
+    // 出错节点 → 修复节点 连线(走 onConnect:同边去重 + 进撤销历史 + 落盘)
+    st.onConnect({ source: id, target: fixId, sourceHandle: null, targetHandle: null })
+    useUiStore.getState().select(fixId)
+  }
+
+  /*
    * 数据探针(悬停 400ms):看这个节点自己最近交出了什么。
    * 定时器放 ref:拖动 / 重渲染不该把它重置。没跑过的节点由 ProbeCard
    * 自己不显示 —— 这里不判断,免得两处规则漂移。
@@ -227,6 +255,17 @@ export function NodeShell({
         )}
         <RunNodeChip nodeId={id} />
         <NodeStatusBadge nodeId={id} />
+        {/* v0.6.4 一键送修:出错时把错误带进一个新建的修复节点并接到下游 */}
+        {status === 'failed' && lastError ? (
+          <button
+            className="mini node-fix"
+            title={`一键送修:${lastError.slice(0, 80)}`}
+            aria-label="一键送修"
+            onClick={sendToFix}
+          >
+            送修
+          </button>
+        ) : null}
         {/*
           × 放在最右边、且**平时半透明** —— 它和「跑这个节点」挨着,
           不弱化的话误点概率不低,而删节点是没有撤销的。

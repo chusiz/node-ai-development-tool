@@ -1,6 +1,6 @@
 import { useState, type JSX } from 'react'
 import { unwrap } from '../../lib/unwrap'
-import { useGraphStore } from '../../stores/graphStore'
+import { useGraphStore, useResolvedProjectDir } from '../../stores/graphStore'
 import { DeleteRow, TitleField } from './NodeConfigPanel'
 import type { BuildOptions, BuildTarget } from '../../../../shared/canvas'
 
@@ -14,7 +14,9 @@ import type { BuildOptions, BuildTarget } from '../../../../shared/canvas'
 export function OutputConfig({ nodeId }: { nodeId: string }): JSX.Element | null {
   const node = useGraphStore((s) => s.nodes.find((n) => n.id === nodeId))
   const patchConfig = useGraphStore((s) => s.patchConfig)
+  const { dir: projectDir } = useResolvedProjectDir()
   const [busy, setBusy] = useState(false)
+  const [previewMsg, setPreviewMsg] = useState<string | null>(null)
 
   if (!node) return null
   const opts: BuildOptions = node.data.buildOptions ?? {}
@@ -41,6 +43,25 @@ export function OutputConfig({ nodeId }: { nodeId: string }): JSX.Element | null
     try {
       const picked = unwrap(await window.api.dialog.pickFile('选择应用图标(.ico)'))
       if (picked) patchOptions({ icon: picked })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** v0.6.4 产物预览内置化:不用去文件夹找,应用内直接看 */
+  const doPreview = async (): Promise<void> => {
+    setPreviewMsg(null)
+    if (!projectDir) {
+      setPreviewMsg('还没有项目目录:先放一个项目节点并指定目录。')
+      return
+    }
+    const outDir = opts.outDir || `${projectDir.replace(/[\\/]$/, '')}\\dist`
+    setBusy(true)
+    try {
+      const r = unwrap(await window.api.preview.output(outDir, target))
+      setPreviewMsg(r.url ? `已在浏览器打开 ${r.url}` : '已打开(浏览器 / 资源管理器)')
+    } catch (e) {
+      setPreviewMsg(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
@@ -140,6 +161,20 @@ export function OutputConfig({ nodeId }: { nodeId: string }): JSX.Element | null
             {opts.icon ? '换图标…' : '选择 .ico…'}
           </button>
         </div>
+      </div>
+
+      {/* v0.6.4 产物预览:web → 浏览器;exe → 直接启动;game → 打开目录 */}
+      <div className="cfglabel col">
+        <span>预览产物</span>
+        <div className="cwd-picker">
+          <button onClick={() => void doPreview()} disabled={busy} title="不修改任何文件:按打包目标打开产物">
+            {target === 'exe' ? '启动 exe' : target === 'web' ? '在浏览器打开' : '打开产物目录'}
+          </button>
+          <div className={`cwd-value ${previewMsg && previewMsg.includes('!') ? 'err' : ''}`} style={{ flex: 1 }}>
+            {previewMsg || `目录:${opts.outDir || projectDir ? (opts.outDir || `${projectDir}\\dist`) : '(未定)'}`}
+          </div>
+        </div>
+        <div className="fhint">先运行输出节点完成打包,再点这里直接预览 —— 不用去文件夹找产物。</div>
       </div>
 
       <label className="cfglabel">

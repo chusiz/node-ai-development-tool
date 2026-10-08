@@ -113,8 +113,8 @@ function createWindow(): BrowserWindow {
 }
 
 // 不调用 requestSingleInstanceLock —— 需求本身就要"多开"
-void app.whenReady().then(() => {
-  const ipc = createIpc()
+void app.whenReady().then(async () => {
+  const ipc = await createIpc()
   manager = ipc.manager
   hub = ipc.hub
   runner = ipc.runner

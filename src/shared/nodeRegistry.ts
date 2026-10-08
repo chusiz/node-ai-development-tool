@@ -27,7 +27,7 @@
 //     靠"仅类型"擦除后不存在运行时循环依赖;
 //   - GraphIssue / NodeSpecSource 同理来自 workflow。
 import type { GraphIssue, NodeSpecSource } from './workflow'
-import type { ChartParams, ChartType, NodeConfig } from './canvas'
+import type { ChartParams, ChartType, NodeConfig, PythonParams } from './canvas'
 // 按值引:normalizeSubgraph 是纯函数(与 canvas 的 migrateGraph 同一族),
 // canvas 对 nodeRegistry 只有 type-only 的反向引用,运行时无环
 import { normalizeSubgraph } from './canvas'
@@ -91,6 +91,7 @@ export type NodeIconName =
   | 'agent'
   | 'router'
   | 'chart'
+  | 'python'
 
 /** 类型角标:图标 + 文字 + 颜色类(+ 可选 tooltip) */
 export interface NodeBadge {
@@ -894,8 +895,55 @@ export const NODE_TYPES = {
       return out
     },
   },
-  prompt: {
-    // ★ 生图工作区(v0.5.0):正向提示词节点 —— 纯数据源,不执行任何动作
+  python: {
+    // ★ 多语言节点(v0.6.4,改进建议第七条):子进程跑 Python 脚本,stdout 交给下游。
+    // 复用 AI/ML 生态(数据处理 / 算法 / 接口调用),不需要为了跑一段脚本去改主仓库。
+    label: 'Python',
+    badge: { icon: 'python', text: 'Python', cls: 'kind-python', title: 'Python 节点:子进程跑脚本,stdout 交给下游(复用 AI/ML 生态)' },
+    ports: { target: 1, source: 1 },
+    executor: 'builtin',
+    action: 'python',
+    payload: 'handoff',
+    defaultTitle: 'Python 节点',
+    addEntries: [
+      {
+        key: 'python',
+        label: 'Python',
+        icon: 'python',
+        hint: '多语言:在项目里跑一段 Python 脚本(stdout 交给下游),不消耗 token',
+        preset: { pythonParams: { script: 'print("hello from python")' } },
+      },
+    ],
+    defaultConfig: { pythonParams: { script: '' } },
+    normalize: (m, raw) => {
+      const rp = (raw as { pythonParams?: Partial<PythonParams> }).pythonParams
+      return {
+        ...m,
+        pythonParams: {
+          script: typeof rp?.script === 'string' ? rp.script : '',
+          scriptPath: typeof rp?.scriptPath === 'string' ? rp.scriptPath : '',
+          args: Array.isArray(rp?.args) ? rp.args.map(String) : [],
+          pythonPath: typeof rp?.pythonPath === 'string' ? rp.pythonPath : '',
+          timeoutSec: Number.isFinite(Number(rp?.timeoutSec))
+            ? Math.max(5, Math.min(3600, Math.trunc(Number(rp?.timeoutSec))))
+            : 300,
+        },
+      }
+    },
+    validate: (ctx) => {
+      const out: GraphIssue[] = []
+      const p = (ctx.data.pythonParams ?? {}) as Partial<PythonParams>
+      if (!String(p.script ?? '').trim() && !String(p.scriptPath ?? '').trim()) {
+        out.push({
+          level: 'warn',
+          nodeId: ctx.id,
+          message: `Python 节点「${ctx.data.title || ctx.id}」还没写脚本 —— 填一段 Python 代码,或指定一个 .py 文件相对路径`,
+        })
+      }
+      return out
+    },
+  },
+  prompt: {    // ★ 生图工作区(v0.5.0):正向提示词节点 —— 纯数据源,不执行任何动作
     label: '正向提示词',
     badge: { icon: 'prompt', text: '正向', cls: 'kind-prompt', title: '生图工作区:画面要什么(纯文本,不出图)' },
     ports: { target: 0, source: 1 },
@@ -1150,6 +1198,7 @@ export type NodeKind =
   | 'agent'
   | 'router'
   | 'chart'
+  | 'python'
 
 /**
  * 取类型定义。未知 kind(手改 graph.json 写了 type:'foo')一律**回落 feature**

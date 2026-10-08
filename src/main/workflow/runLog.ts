@@ -25,8 +25,7 @@ export function persistRun(state: RunState): void {
 }
 
 /** 读回某次运行。损坏就返回 null,不抛 —— 重启后 UI 不该因为一个坏文件起不来 */
-export async function readRun(runId: string): Promise<RunState | null> {
-  try {
+export async function readRun(runId: string): Promise<RunState | null> {  try {
     const raw = await fsp.readFile(runFile(runId), 'utf8')
     const o = JSON.parse(raw) as Partial<RunState>
     if (!o || typeof o !== 'object' || typeof o.runId !== 'string') return null
@@ -41,6 +40,33 @@ export async function readRun(runId: string): Promise<RunState | null> {
       endedAt: typeof o.endedAt === 'number' ? o.endedAt : undefined,
       nodes: o.nodes as RunState['nodes'],
     }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * v0.6.4 增量执行:找某画布**最近一次成功落盘**的运行态(按 mtime)。
+ * 供 runner 在每次 run 开头读取,作为"输入未变 → 复用上次产出"的对照基线。
+ */
+export async function findLatestRunState(canvasId: string): Promise<RunState | null> {
+  try {
+    const entries = await fsp.readdir(RUNS_ROOT)
+    let best: { m: number; s: RunState } | null = null
+    for (const name of entries) {
+      if (!name.endsWith('.json')) continue
+      const runId = name.slice(0, -5)
+      try {
+        const st = await readRun(runId)
+        if (st && st.canvasId === canvasId && st.status === 'done') {
+          const stt = await fsp.stat(runFile(runId))
+          if (!best || stt.mtimeMs > best.m) best = { m: stt.mtimeMs, s: st }
+        }
+      } catch {
+        /* 单个坏文件跳过,不影响其它 */
+      }
+    }
+    return best?.s ?? null
   } catch {
     return null
   }

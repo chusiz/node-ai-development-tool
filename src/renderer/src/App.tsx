@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import { Canvas } from './flow/Canvas'
+import { GuideOverlay } from './components/GuideOverlay'
 import { SessionBridge } from './components/SessionBridge'
 import { RunBar } from './components/Workflow/RunBar'
 import { InspectorPanel } from './components/Inspector/InspectorPanel'
@@ -231,6 +232,8 @@ export default function App(): JSX.Element {
           <div className="canvas-wrap">
             <div className="canvas-stage">
               <Canvas />
+              {/* v0.6.4 新手引导:画布右上角「?」,5 步讲完第一单 */}
+              <GuideOverlay />
               {/* 空画布时给一个明确的起点,而不是让用户对着干净背景发愣 */}
               {nodeCount === 0 && (
                 <div className="canvas-empty">

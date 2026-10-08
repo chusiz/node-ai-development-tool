@@ -262,6 +262,24 @@ export type NodeConfig = {
   // ---- chart 专属(v0.6.2 可视化图形制作:内置 SVG 图表渲染)----
   /** 图表参数:类型 / 标题 / 尺寸 / 数据(数据模板可含 {{input}} 注入上游产出) */
   chartParams?: ChartParams
+
+  // ---- python 专属(v0.6.4 多语言节点:子进程跑 Python 脚本)----
+  /** Python 执行参数:脚本本体 / 脚本文件 / 命令行参数 / python 路径 */
+  pythonParams?: PythonParams
+}
+
+/** v0.6.4 Python 节点参数:子进程跑脚本,stdout 交下游 */
+export interface PythonParams {
+  /** 脚本本体(python 源码);与 scriptPath 二选一 */
+  script?: string
+  /** 脚本文件相对项目目录的路径(script 为空时读取它) */
+  scriptPath?: string
+  /** 传给脚本的命令行参数(逐项,不做 shell 展开) */
+  args?: string[]
+  /** python 可执行文件;空 = 用 PATH 里的 python */
+  pythonPath?: string
+  /** 超时(秒),缺省 300 */
+  timeoutSec?: number
 }
 
 /** 图表类型(v0.6.2):ECharts SSR 支持的 5 种 */

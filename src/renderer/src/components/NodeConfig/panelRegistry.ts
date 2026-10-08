@@ -16,6 +16,7 @@ import { PromptConfig, NegativeConfig, SamplerConfig, ImageOutputConfig } from '
 import { AgentConfig } from './AgentConfig'
 import { RouterConfig } from './RouterConfig'
 import { ChartConfig } from './ChartConfig'
+import { PythonConfig } from './PythonConfig'
 
 /**
  * kind → 配置面板。与 `flow/nodeTypes.ts` **对称**:
@@ -47,4 +48,5 @@ export const PANEL_BY_KIND: Record<NodeKind, (p: { nodeId: string }) => JSX.Elem
   agent: AgentConfig,
   router: RouterConfig,
   chart: ChartConfig,
+  python: PythonConfig,
 }
