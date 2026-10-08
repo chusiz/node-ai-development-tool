@@ -234,13 +234,16 @@ body {
   white-space: nowrap;
 }
 
-/* Claude CLI 状态徽标(图标化后更紧凑):绿点状态随 .badge.ok/.err 走 */
-.cli-flag {
+/* 顶栏「当前模型」入口(图标化):绿 = 已配置默认模型,红 = 未配置。是按钮,点击进设置 */
+.model-flag {
   padding: 2px 5px;
   font-size: 0;
   line-height: 0;
+  border: none;
+  cursor: pointer;
+  flex: 0 0 auto;
 }
-.cli-flag svg {
+.model-flag svg {
   display: block;
 }
 

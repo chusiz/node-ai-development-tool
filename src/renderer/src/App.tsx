@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { Canvas } from './flow/Canvas'
 import { GuideOverlay } from './components/GuideOverlay'
 import { SessionBridge } from './components/SessionBridge'
@@ -13,11 +13,13 @@ import { WindowControls } from './components/WindowControls'
 import { FirstRunBanner } from './components/FirstRunBanner'
 import { MemoryMeter } from './components/Settings/MemoryMeter'
 import { useShortcuts } from './hooks/useShortcuts'
+import { useSettingsStore } from './stores/settingsStore'
 import { flushGraphSave, useGraphStore } from './stores/graphStore'
 import { useRuntimeStore } from './stores/runtimeStore'
 import { useUiStore } from './stores/uiStore'
 import { unwrap } from './lib/unwrap'
 import { canvasIdFor, WORKSPACE_LABEL, type WorkspaceId } from '../../shared/nodeRegistry'
+import { effectiveModel, providerIdOfAgent } from '../../shared/providers'
 import type { DetectResult } from './types'
 
 /**
@@ -97,6 +99,47 @@ export default function App(): JSX.Element {
   }, [recheck])
 
   /*
+   * 顶栏「当前模型」入口:显示设置里配置的默认模型(任意供应商,
+   * 火山方舟 / Gemini / 自定义 API / 本地模型……),不再绑死 claude。
+   * 取 providers 里第一个填了 defaultModel 的;没填则提示去设置。
+   */
+  const agentProviders = useSettingsStore((s) => s.payload?.current?.agent?.providers)
+  const selectedNodeId = useUiStore((s) => s.selectedNodeId)
+  const selectedNode = useGraphStore((s) =>
+    selectedNodeId ? s.nodes.find((n) => n.id === selectedNodeId) : undefined,
+  )
+
+  /*
+   * 顶栏模型入口的取值优先级:
+   *   选中了会话节点 → 显示该节点实际生效的模型(节点显式选的 > 该供应商默认 > 内置首选);
+   *   否则 → 全局默认(设置里第一个配了 defaultModel 的供应商)。
+   * 每个节点都可在「节点配置」里单独选自己的 agent 和模型,顶栏随之反映。
+   */
+  const globalModel = useMemo(() => {
+    if (!agentProviders) return null
+    for (const cfg of Object.values(agentProviders)) {
+      const m = (cfg?.defaultModel ?? '').trim()
+      if (m) return m
+    }
+    return null
+  }, [agentProviders])
+
+  const nodeModel = useMemo(() => {
+    if (!selectedNode) return null
+    const pid = providerIdOfAgent(selectedNode.data.agentId)
+    const def = pid ? (agentProviders?.[pid]?.defaultModel ?? '') : ''
+    const eff = effectiveModel(selectedNode.data.agentId, selectedNode.data.model, def)
+    return eff || null
+  }, [selectedNode, agentProviders])
+
+  const shownModel = selectedNode ? nodeModel : globalModel
+  const modelTitle = selectedNode
+    ? `节点「${selectedNode.data.title ?? selectedNode.id}」的模型:${shownModel ?? '未配置'} — 每个节点可在节点配置里单独换 AI/agent`
+    : shownModel
+      ? `全局默认模型:${shownModel} — 点击设置(每个节点可单独配置自己的模型/agent)`
+      : '未配置默认模型 — 点击设置(支持火山方舟 / Gemini / 本地模型等)'
+
+  /*
    * 设置面板关掉之后重探一次。
    *
    * 用户去设置里干的事,十有八九就是"把 claude 路径填对"。不重探的话,
@@ -125,12 +168,9 @@ export default function App(): JSX.Element {
   }, [])
 
   /*
-   * 顶栏徽标只关心 claude 这一个 CLI。DetectResult 自 v0.4.0 起是判别联合
-   * (found:true 还分 cli / api 两种形态),所以这里必须先把 kind 收窄到 'cli',
-   * 才能安全读 exe / version —— 否则 TS 会拒绝,因为 api 形态没有这两个字段。
-   * 收窄一次、后面三处复用,比在每个表达式里各写一遍 kind 判断干净。
+   * DetectResult 自 v0.4.0 起是判别联合(found:true 还分 cli / api 两种形态)。
+   * 顶栏已不再显示 claude 徽标(改为「当前模型」入口),detect 仅供 FirstRunBanner 使用。
    */
-  const cli = detect?.found && detect.kind === 'cli' ? detect : null
 
   return (
     <div className="app">
@@ -185,14 +225,15 @@ export default function App(): JSX.Element {
           saving && <span className="badge">保存中…</span>
         )}
 
-        {/* Claude CLI 状态:绿 = 已检测到,红 = 未检测到。图标化,悬停显示版本与路径 */}
-        <span
-          className={cli ? 'badge ok cli-flag' : 'badge err cli-flag'}
-          title={bootErr ?? (cli ? `claude ${cli.version ?? '?'} — ${cli.exe}` : '未检测到 claude')}
-          aria-label={cli ? `claude ${cli.version ?? '?'}` : '未检测到 claude'}
+        {/* 模型入口:选中节点时显示该节点的模型,否则显示全局默认。绿=已配置,红=未配置。点击打开设置 */}
+        <button
+          className={shownModel ? 'badge ok model-flag' : 'badge err model-flag'}
+          title={modelTitle}
+          aria-label={shownModel ? `模型 ${shownModel}` : '配置模型'}
+          onClick={() => setShowSettings(true)}
         >
           <Icon name="terminal" size={12} />
-        </span>
+        </button>
 
         <MemoryMeter />
         <button onClick={() => setShowSkills(true)} title="管理已安装的技能" aria-label="管理已安装的技能">

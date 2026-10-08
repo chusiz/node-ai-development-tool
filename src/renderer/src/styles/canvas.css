@@ -1277,11 +1277,13 @@ button.ghost.on {
   display: flex;
   flex-direction: column;
   min-width: 150px;
+  max-height: min(560px, calc(100vh - 180px)); /* 节点类型多时菜单超高:限制高度并滚动,否则下面的节点永远看不到 */
+  overflow-y: auto;
+  overflow-x: hidden;
   background: var(--bg-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   box-shadow: 0 8px 22px rgb(0 0 0 / 45%);
-  overflow: hidden;
 }
 
 .canvas-tools .add-menu button {
