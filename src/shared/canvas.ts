@@ -266,6 +266,104 @@ export type NodeConfig = {
   // ---- python 专属(v0.6.4 多语言节点:子进程跑 Python 脚本)----
   /** Python 执行参数:脚本本体 / 脚本文件 / 命令行参数 / python 路径 */
   pythonParams?: PythonParams
+
+  // ---- gate 专属(v0.6.5 反馈闭环:失败即拦截 + 触发自动修复)----
+  /** 闸门参数:校验规则(命令退出码 / 上游产出文本),不通过则失败并拦住下游 */
+  gateParams?: GateParams
+
+  // ---- 自动修复(v0.6.5 反馈闭环:feature/agent 节点配置)----
+  /** 开启后:下游 gate/test 失败时,本节点自动进入修复轮次(错误喂回 LLM 重跑) */
+  autofix?: AutofixParams
+
+  // ---- v0.6.6 工程化节点群(P1/P2/P4)----
+  /** lint 专属:静态检查命令(缺省 npx tsc --noEmit) */
+  lintParams?: LintParams
+  /** git 专属:本地版本操作(status / commit / log / branch,不 push) */
+  gitParams?: GitParams
+  /** deps 专属:依赖清单与缺失检测(自动识别 npm / pip) */
+  depsParams?: DepsParams
+  /** context 专属:项目记忆(代码风格 / 规范 / 接口清单,落盘供下游引用) */
+  contextParams?: ContextParams
+  /** contract 专属:接口契约(从上游文本提取路由,生成 OpenAPI 骨架) */
+  contractParams?: ContractParams
+  /** cost 专属:运行摘要与成本估算(各节点状态 / 耗时 / 产出规模) */
+  costParams?: CostParams
+  /** diff 专属:项目现状快照(文件树 + 变更统计,给增量修改当上下文) */
+  diffParams?: DiffParams
+  /** deploy 专属:Web 静态部署包(复制产物 + 生成 vercel/netlify 配置) */
+  deployParams?: DeployParams
+}
+
+/** v0.6.6 lint 节点:静态检查(确定性,比 LLM 审查更便宜) */
+export interface LintParams {
+  /** 检查命令(在项目目录执行,退出码 0 = 通过);空 = npx tsc --noEmit */
+  command?: string
+  timeoutSec?: number
+}
+
+/** v0.6.6 git 节点:本地版本操作(只在项目目录内,不 push 外部) */
+export interface GitParams {
+  op: 'status' | 'commit' | 'log' | 'branch'
+  /** op=commit 时用;空 = 自动消息 */
+  message?: string
+}
+
+/** v0.6.6 deps 节点:依赖管理(清单 + 缺失检测 + 版本) */
+export interface DepsParams {
+  /** 自动识别 package.json / requirements.txt */
+  manager?: 'auto' | 'npm' | 'pip'
+}
+
+/** v0.6.6 context 节点:项目记忆 */
+export interface ContextParams {
+  /** 记忆文本:代码风格 / 命名规范 / 已定义接口 / 目录结构说明 */
+  text?: string
+}
+
+/** v0.6.6 contract 节点:接口契约 */
+export interface ContractParams {
+  /** 手工补充的契约说明(与上游产出合并) */
+  text?: string
+}
+
+/** v0.6.6 cost 节点:运行摘要(参数留空,数据由调度器注入) */
+export interface CostParams {
+  /* 无 */
+}
+
+/** v0.6.6 diff 节点:项目现状快照 */
+export interface DiffParams {
+  /* 无 */
+}
+
+/** v0.6.6 deploy 节点:Web 静态部署包 */
+export interface DeployParams {
+  /** 部署平台配置 */
+  platform?: 'vercel' | 'netlify' | 'static'
+}
+
+/** v0.6.5 闸门(Gate)节点参数:运行 → 校验 → 不通过就拦住,别往下传 */
+export interface GateParams {
+  /** 校验方式:exit = 跑命令看退出码;text = 校验上游产出文本 */
+  mode: 'exit' | 'text'
+  /** mode=exit:要跑的命令(在项目目录里执行) */
+  command?: string
+  /** mode=exit:命令超时(秒),缺省 120 */
+  timeoutSec?: number
+  /** mode=text:文本判定规则 */
+  textRule?: 'contains' | 'not-contains' | 'regex'
+  /** mode=text:匹配文本 / 正则 */
+  pattern?: string
+  /** 失败时给修复节点的提示(可留空,默认"修复使其通过校验") */
+  hint?: string
+}
+
+/** v0.6.5 自动修复参数:挂在 feature/agent 节点上,给下游失败兜底 */
+export interface AutofixParams {
+  /** 是否开启自动修复(下游 gate/test 失败时触发) */
+  enabled?: boolean
+  /** 本轮运行内最多修复轮数(1..3,缺省 2) */
+  maxRounds?: number
 }
 
 /** v0.6.4 Python 节点参数:子进程跑脚本,stdout 交下游 */

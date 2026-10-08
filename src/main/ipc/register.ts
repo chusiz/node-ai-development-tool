@@ -57,6 +57,8 @@ import type { Handoff } from '../handoff'
 import type { ChartGen } from '../chartgen/ChartGen'
 import type { TestRunner } from '../testrun'
 import type { PythonRunner } from '../pythonrun'
+import type { GateRunner } from '../gaterun'
+import type { ToolkitRunner } from '../toolkit'
 import { killAllBuiltin, registerBuiltinAction } from '../builtin/registry'
 import { auditProject } from '../audit'
 import { sdStatus, sdStart, sdStop, type LocalSdStatus, type SdStartResult } from '../localservices'
@@ -78,6 +80,10 @@ let _chartgen: ChartGen | null = null
 const getChartgen = async (): Promise<ChartGen> => (_chartgen ??= new (await import('../chartgen/ChartGen')).ChartGen())
 let _pythonrun: PythonRunner | null = null
 const getPythonrun = async (): Promise<PythonRunner> => (_pythonrun ??= new (await import('../pythonrun')).PythonRunner())
+let _gaterun: GateRunner | null = null
+const getGaterun = async (): Promise<GateRunner> => (_gaterun ??= new (await import('../gaterun')).GateRunner())
+let _toolkit: ToolkitRunner | null = null
+const getToolkit = async (): Promise<ToolkitRunner> => (_toolkit ??= new (await import('../toolkit')).ToolkitRunner())
 
 function ok<T>(data: T): Envelope<T> {
   return { ok: true, data }
@@ -238,6 +244,22 @@ export async function createIpc(): Promise<{
     run: (r) => pythonrun.run(r),
     cancel: (id) => pythonrun.cancel(id),
   })
+  // v0.6.5 反馈闭环:闸门 —— 校验不过就拦住下游,失败触发上游自动修复
+  const gaterun = await getGaterun()
+  registerBuiltinAction('gate', {
+    run: (r) => gaterun.run(r),
+    cancel: (id) => gaterun.cancel(id),
+    killAll: () => gaterun.killAll(),
+  })
+  // v0.6.6 工程化节点群:lint / git / deps / context / contract / cost / diff / deploy
+  const toolkit = await getToolkit()
+  for (const action of ['lint', 'git', 'deps', 'context', 'contract', 'cost', 'diff', 'deploy']) {
+    registerBuiltinAction(action, {
+      run: (r) => toolkit.run(r),
+      cancel: (id) => toolkit.cancel(id),
+      killAll: () => toolkit.killAll(),
+    })
+  }
   /*
    * 生图工作区(v0.5.0)执行器:
    *   - noop:prompt / prompt_negative 节点 —— 把提示词文本作为节点产出交下去;

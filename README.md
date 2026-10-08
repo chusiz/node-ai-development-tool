@@ -61,6 +61,22 @@ Above: a pixel-dungeon game asset pack (scenes / characters / monsters / UI / it
 
 Try the **agent-orchestration** built-in template: project → planning agent → two parallel execution agents → merge → reviewer agent → output exe.
 
+## Feedback loop & engineering toolkit (v0.6.5 / v0.6.6)
+
+**Run → fail → fix → re-run**, no longer a one-way pipeline:
+
+- **Gate node** — a check point on the chain: `exit` mode runs a command and checks the exit code, `text` mode validates the upstream output (contains / not-contains / regex). Fail = the node fails and everything downstream is blocked.
+- **Auto-Fix** — enable `autofix` on a feature/agent node and, whenever a downstream gate/test fails, the error is fed back to the LLM and that sub-chain re-runs (bounded by `maxRounds`).
+- **8 deterministic engineering nodes** (zero LLM tokens):
+  - `lint` — static check (`npx tsc --noEmit` or any command; exit code decides pass/fail);
+  - `git` — local version control (`status` / `commit` with auto local identity / `log` / `branch`; never pushes);
+  - `deps` — dependency report & missing detection (auto-detects npm `package.json` / pip `requirements.txt`);
+  - `context` — project memory (style / conventions / interface list, saved to `assets/generated/context.md`, referenced by downstream);
+  - `contract` — API contract (extracts `app.get/post…` routes & `fetch` calls from upstream code → `openapi.yaml`);
+  - `cost` — run summary (status / duration / output size of every node this round, estimated tokens);
+  - `diff` — project snapshot (file tree & size distribution, perfect before incremental edits);
+  - `deploy` — one-click deployment folder (copies the Web build to `deploy/` with `vercel.json` / `netlify.toml`).
+
 ## Open-source skill marketplace
 
 Skills drawer now has a **Marketplace** tab:

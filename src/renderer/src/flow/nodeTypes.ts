@@ -13,6 +13,8 @@ import { HandoffNode } from './HandoffNode'
 import { SubgraphNode } from './SubgraphNode'
 import { PromptNode, NegativeNode, SamplerNode, ImageOutputNode } from './ImageFlowNodes'
 import { PythonNode } from './PythonNode'
+import { GateNode } from './GateNode'
+import { LintNode, GitNode, DepsNode, ContextNode, ContractNode, CostNode, DiffNode, DeployNode } from './ToolkitNodes'
 
 /**
  * ⚠️ 必须是**模块级常量**,而且只在这里定义这一次。
@@ -53,4 +55,13 @@ export const nodeTypes = {
   sampler: SamplerNode,
   image_output: ImageOutputNode,
   python: PythonNode,
+  gate: GateNode,
+  lint: LintNode,
+  git: GitNode,
+  deps: DepsNode,
+  context: ContextNode,
+  contract: ContractNode,
+  cost: CostNode,
+  diff: DiffNode,
+  deploy: DeployNode,
 } satisfies NodeTypes

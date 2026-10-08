@@ -47,6 +47,41 @@ export function FeatureConfig({ nodeId }: { nodeId: string }): JSX.Element | nul
         cwdMode="readonly"
       />
 
+      {/* v0.6.5 反馈闭环:自动修复 —— 下游闸门/测试失败时,错误喂回本节点重跑 */}
+      <div className="cfglabel col">
+        <label className="autofix-toggle">
+          <input
+            type="checkbox"
+            checked={!!node.data.autofix?.enabled}
+            onChange={(e) =>
+              useGraphStore
+                .getState()
+                .patchConfig(nodeId, { autofix: { ...(node.data.autofix ?? {}), enabled: e.target.checked } })
+            }
+          />
+          <span>自动修复:下游校验失败时,把错误喂回本节点重跑</span>
+        </label>
+        {node.data.autofix?.enabled && (
+          <label className="cfglabel narrow">
+            <span>修复轮次上限</span>
+            <input
+              type="number"
+              min={1}
+              max={3}
+              value={node.data.autofix?.maxRounds ?? 2}
+              onChange={(e) =>
+                useGraphStore
+                  .getState()
+                  .patchConfig(nodeId, { autofix: { ...(node.data.autofix ?? {}), enabled: true, maxRounds: Number(e.target.value) } })
+              }
+            />
+          </label>
+        )}
+        <div className="fhint">
+          适合串行改造节点:下游「闸门 / 测试」没过时,本节点带着真实报错自动再改一轮,直到通过或轮次用尽。
+        </div>
+      </div>
+
       {source === 'canvas' && (
         <div className="fhint">
           <Icon name="alert" size={12} />

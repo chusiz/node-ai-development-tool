@@ -17,6 +17,8 @@ import { AgentConfig } from './AgentConfig'
 import { RouterConfig } from './RouterConfig'
 import { ChartConfig } from './ChartConfig'
 import { PythonConfig } from './PythonConfig'
+import { GateConfig } from './GateConfig'
+import { ToolkitConfig } from './ToolkitConfig'
 
 /**
  * kind → 配置面板。与 `flow/nodeTypes.ts` **对称**:
@@ -49,4 +51,13 @@ export const PANEL_BY_KIND: Record<NodeKind, (p: { nodeId: string }) => JSX.Elem
   router: RouterConfig,
   chart: ChartConfig,
   python: PythonConfig,
+  gate: GateConfig,
+  lint: ToolkitConfig,
+  git: ToolkitConfig,
+  deps: ToolkitConfig,
+  context: ToolkitConfig,
+  contract: ToolkitConfig,
+  cost: ToolkitConfig,
+  diff: ToolkitConfig,
+  deploy: ToolkitConfig,
 }

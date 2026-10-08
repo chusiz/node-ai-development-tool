@@ -1001,6 +1001,25 @@ button.ghost.on {
   color: #d3e58c;
 }
 
+/* gate (v0.6.5): gate is a checkpoint that blocks downstream - warning amber/red */
+.node-kind-badge.kind-gate {
+  border-color: #c0552f;
+  color: #ffb08c;
+}
+
+
+/* v0.6.6 engineering toolkit nodes: lint/git/deps/context/contract/cost/diff/deploy */
+.node-kind-badge.kind-lint { border-color: #4f8fb8; color: #a8d4f0; }
+.node-kind-badge.kind-git { border-color: #b07a3f; color: #f0c88a; }
+.node-kind-badge.kind-deps { border-color: #6f9a4f; color: #c0e0a0; }
+.node-kind-badge.kind-context { border-color: #7a6fb8; color: #c4c0ec; }
+.node-kind-badge.kind-contract { border-color: #3f9ab8; color: #a0dcf0; }
+.node-kind-badge.kind-cost { border-color: #b89a3f; color: #f0e0a0; }
+.node-kind-badge.kind-diff { border-color: #8f7ab8; color: #d4c8ec; }
+.node-kind-badge.kind-deploy { border-color: #b85f6f; color: #f0b0bc; }
+.agent-node.kind-gate { border-left: 3px solid #c0552f; }
+
+
 /* 鏂囨。鐜孩:鏆栬壊浣嗛伩寮€骞惰鐨勬,鍜屾暣鍚堢殑绱篃鍒嗗緱寮€ */
 .node-kind-badge.kind-doc {
   border-color: #a53f5f;

@@ -14,6 +14,16 @@ import type {
   ImageProviderConfig,
   NodeKind,
   PythonParams,
+  GateParams,
+  AutofixParams,
+  LintParams,
+  GitParams,
+  DepsParams,
+  ContextParams,
+  ContractParams,
+  CostParams,
+  DiffParams,
+  DeployParams,
   SubgraphTemplate,
   VideoParams,
 } from './canvas'
@@ -123,6 +133,26 @@ export interface WorkflowNodeSpec {
   chartParams?: ChartParams
   /** python 专属(v0.6.4):脚本 / 脚本文件 / 参数 / python 路径 */
   pythonParams?: PythonParams
+  /** gate 专属(v0.6.5):校验规则 */
+  gateParams?: GateParams
+  /** 自动修复(v0.6.5):feature/agent 节点的兜底轮次配置 */
+  autofix?: AutofixParams
+  /** lint 专属(v0.6.6):静态检查命令 */
+  lintParams?: LintParams
+  /** git 专属(v0.6.6):本地版本操作 */
+  gitParams?: GitParams
+  /** deps 专属(v0.6.6):依赖管理 */
+  depsParams?: DepsParams
+  /** context 专属(v0.6.6):项目记忆 */
+  contextParams?: ContextParams
+  /** contract 专属(v0.6.6):接口契约 */
+  contractParams?: ContractParams
+  /** cost 专属(v0.6.6):运行摘要 */
+  costParams?: CostParams
+  /** diff 专属(v0.6.6):项目现状快照 */
+  diffParams?: DiffParams
+  /** deploy 专属(v0.6.6):部署包 */
+  deployParams?: DeployParams
 }
 
 export interface WorkflowEdgeSpec {
@@ -911,6 +941,21 @@ export function specFromGraph(args: {
         routes: isSession && kind === 'router' ? (Array.isArray(n.data.routes) ? n.data.routes.map(String) : []) : undefined,
         chartParams: def.action === 'chart' ? n.data.chartParams : undefined,
         pythonParams: def.action === 'python' ? n.data.pythonParams : undefined,
+        // v0.6.5 反馈闭环:闸门参数 + 自动修复(挂在 feature/agent 上)
+        gateParams: def.action === 'gate' ? n.data.gateParams : undefined,
+        autofix:
+          kind === 'feature' || kind === 'agent'
+            ? { enabled: !!n.data.autofix?.enabled, maxRounds: Math.max(1, Math.min(3, n.data.autofix?.maxRounds ?? 2)) }
+            : undefined,
+        // v0.6.6 工程化节点群:按 action 拍入各专属参数
+        lintParams: def.action === 'lint' ? n.data.lintParams : undefined,
+        gitParams: def.action === 'git' ? n.data.gitParams : undefined,
+        depsParams: def.action === 'deps' ? n.data.depsParams : undefined,
+        contextParams: def.action === 'context' ? n.data.contextParams : undefined,
+        contractParams: def.action === 'contract' ? n.data.contractParams : undefined,
+        costParams: def.action === 'cost' ? n.data.costParams : undefined,
+        diffParams: def.action === 'diff' ? n.data.diffParams : undefined,
+        deployParams: def.action === 'deploy' ? n.data.deployParams : undefined,
       }
     }),
     edges: expanded.edges.map((e) => ({ source: e.source, target: e.target })),
@@ -986,6 +1031,26 @@ export interface NodeSpecSource {
   chartParams?: ChartParams
   /** python 专属(v0.6.4):脚本 / 脚本文件 / 参数 / python 路径 */
   pythonParams?: PythonParams
+  /** gate 专属(v0.6.5):校验规则 */
+  gateParams?: GateParams
+  /** 自动修复(v0.6.5):feature/agent 节点的兜底轮次配置 */
+  autofix?: AutofixParams
+  /** lint 专属(v0.6.6):静态检查命令 */
+  lintParams?: LintParams
+  /** git 专属(v0.6.6):本地版本操作 */
+  gitParams?: GitParams
+  /** deps 专属(v0.6.6):依赖管理 */
+  depsParams?: DepsParams
+  /** context 专属(v0.6.6):项目记忆 */
+  contextParams?: ContextParams
+  /** contract 专属(v0.6.6):接口契约 */
+  contractParams?: ContractParams
+  /** cost 专属(v0.6.6):运行摘要 */
+  costParams?: CostParams
+  /** diff 专属(v0.6.6):项目现状快照 */
+  diffParams?: DiffParams
+  /** deploy 专属(v0.6.6):部署包 */
+  deployParams?: DeployParams
 }
 
 export interface GraphIssue {

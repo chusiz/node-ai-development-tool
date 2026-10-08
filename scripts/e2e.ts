@@ -11,8 +11,9 @@
  *   4. 两轮之间用不同的 nodeId 复现"退出重进"场景
  */
 import fs from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { SessionManager } from '../src/main/agents/manager'
@@ -4570,10 +4571,10 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
      * 顺序 = NODE_TYPES 的键插入顺序;新类型追加在末尾,老入口的相对位置不动 ——
      * 菜单里的数字键直选(1-9)依赖这个顺序,挪一下用户的肌肉记忆就废了。
      */
-    assert(entries.length === 21, `添加入口恰好 21 项(实际 ${entries.length})`)
+    assert(entries.length === 30, `添加入口恰好 30 项(实际 ${entries.length})`)
     assert(
       entries.map((e) => e.kind).join(',') ===
-        'project,feature,feature,merge,output,image,review,test,doc,game,video,handoff,agent,agent,router,chart,python,prompt,prompt_negative,sampler,image_output',
+        'project,feature,feature,merge,output,image,review,test,gate,lint,git,deps,context,contract,cost,diff,deploy,doc,game,video,handoff,agent,agent,router,chart,python,prompt,prompt_negative,sampler,image_output',
       `入口顺序/类型正确(实际 ${entries.map((e) => e.kind).join(',')})`,
     )
     /*
@@ -4596,6 +4597,15 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
       { kind: 'image', label: '图像', icon: 'image', hint: '给项目生成美术素材(不耗 token)' },
       { kind: 'review', label: '审查', icon: 'review', hint: '只读评审上游成果,产出一份问题清单(不改代码)' },
       { kind: 'test', label: '测试', icon: 'test', hint: '在项目里跑测试命令,结果交给下游(不耗 token)' },
+      { kind: 'gate', label: '闸门', icon: 'gate', hint: '运行后校验,不通过就拦住下游(可触发自动修复)' },
+      { kind: 'lint', label: '静态检查', icon: 'lint', hint: '在项目里跑 tsc/eslint 等确定性检查,结果交给下游' },
+      { kind: 'git', label: '版本控制', icon: 'git', hint: '本地 git:提交 / 查看状态 / 最近提交 / 当前分支(不推送)' },
+      { kind: 'deps', label: '依赖管理', icon: 'deps', hint: '检查 package.json / requirements.txt,报告依赖与缺失' },
+      { kind: 'context', label: '项目记忆', icon: 'context', hint: '把风格/规范/接口说明写进项目,下游节点都能引用' },
+      { kind: 'contract', label: '接口契约', icon: 'contract', hint: '提取 API 路由生成 openapi.yaml,前后端对齐契约' },
+      { kind: 'cost', label: '运行摘要', icon: 'cost', hint: '统计本轮各节点耗时与产出规模,估算成本' },
+      { kind: 'diff', label: '现状快照', icon: 'diff', hint: '扫描现有项目文件与规模,增量修改时先看现状' },
+      { kind: 'deploy', label: '一键部署', icon: 'deploy', hint: '把 Web 产物复制成可上传的部署包(vercel/netlify)' },
       { kind: 'doc', label: '文档', icon: 'doc', hint: '按上游改动补写 / 更新文档(README、接口说明等)' },
       { kind: 'game', label: '游戏', icon: 'game', hint: '用 Godot 引擎制作 2D/3D 游戏(生成项目文件,Godot 编辑器打开即可运行)' },
       {
@@ -4643,7 +4653,7 @@ async function nodesV2ZeroRegressionTests(): Promise<void> {
     }))
     assert(
       JSON.stringify(actualEntries) === JSON.stringify(expectedEntries),
-      `二十一条入口的 label/icon/hint 与声明表逐字相等(实际 ${JSON.stringify(actualEntries)})`,
+      `三十条入口的 label/icon/hint 与声明表逐字相等(实际 ${JSON.stringify(actualEntries)})`,
     )
     // 文字里不许再有 emoji / 几何图形字符 —— 图标一律走 icon 字段
     const emojiish = /[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u
@@ -8087,6 +8097,12 @@ const main = async (): Promise<void> => {
   console.log('\n========== 32. v0.6.4:python 节点 / 增量执行 / 安全审计 / MCP(零 LLM) ==========')
   await v064FeaturesTests()
 
+  console.log('\n========== 33. v0.6.5 反馈闭环:闸门节点 / 自动修复 / 轮次上限(零 LLM) ==========')
+  await v065FeedbackLoopTests()
+
+  console.log('\n========== 34. v0.6.6 工程化节点群:lint/git/deps/context/contract/cost/diff/deploy ==========')
+  await v066ToolkitTests()
+
   console.log('\n========== 结果 ==========')
   // 三态汇总(T09):失败决定退出码;跳过如实披露,不冒充通过
   console.log(`通过 ${passCount} / 跳过 ${skipCount} / 失败 ${failCount}`)
@@ -8208,6 +8224,361 @@ async function v064FeaturesTests(): Promise<void> {
     assert(joined.includes('"tools"') || joined.includes('list_nodes'), 'tools/list 返回工具清单')
     assert(joined.includes('r-mcp'), 'tools/call 真的跑了 run_workflow')
   }
+}
+
+/**
+ * T33 · v0.6.5 反馈闭环回归(零 LLM、零网络):
+ *   闸门节点注册与分发 / 失败拦截 / 自动修复(错误喂回上游重跑)/ 轮次上限 / 真实执行器规则。
+ */
+async function v065FeedbackLoopTests(): Promise<void> {
+  // ---- 33a. gate 节点注册表声明:builtin / action / 端口 / 入口 / 默认配置 ----
+  {
+    const def = NODE_TYPES.gate
+    assert(!!def, 'gate 已注册')
+    assert(def.executor === 'builtin' && def.action === 'gate', 'gate 是 builtin(gate) 执行')
+    assert(def.ports.target === 1 && def.ports.source === 1, 'gate 端口 1 入 1 出')
+    assert((def.addEntries ?? []).some((e) => e.key === 'gate' && e.label === '闸门'), '添加入口含「闸门」')
+    const g = (def.defaultConfig as { gateParams: { mode: string; textRule: string } }).gateParams
+    assert(g.mode === 'text' && g.textRule === 'contains', 'gate 默认 text/contains 校验')
+  }
+
+  // ---- 33b. gate 分发与参数透传:builtin(gate) + gateParams 到执行器 + 产出交下游 ----
+  {
+    const env = new FakeEnv()
+    env.planBuiltin('G', [{ ok: true, handoffText: '[闸门] 通过(包含「PASS」)', log: 'ok' }])
+    const state = await new WorkflowRunner(env).run(
+      specOf(
+        [
+          nodeSpec('P', '', { kind: 'project', cwd: 'D:\\proj' }),
+          nodeSpec('G', '', { kind: 'gate', gateParams: { mode: 'text', textRule: 'contains', pattern: 'PASS' } }),
+        ],
+        [['P', 'G']],
+        { canvasId: 'e2e-gate' },
+      ),
+    )
+    assert(state.status === 'done', `gate 通过 → 链路完成(实际 ${state.status})`)
+    const call = env.builtinCalls.find((c) => c.nodeId === 'G')
+    assert(!!call && call.action === 'gate', 'gate 节点走到 builtin(gate)')
+    assert(call!.gateParams?.pattern === 'PASS' && call!.gateParams?.mode === 'text', 'gateParams 传到执行器')
+    assert((state.nodes['G']?.outputPreview ?? '').includes('[闸门] 通过'), 'gate 产出交给下游')
+  }
+
+  // ---- 33c. gate 失败拦截:无 autofix → 节点 failed、下游被拦(skip) ----
+  {
+    const env = new FakeEnv()
+    env.planBuiltin('G', [{ ok: false, error: '闸门未通过:要求包含「PASS」,但上游产出不满足', log: 'no' }])
+    const state = await new WorkflowRunner(env).run(
+      specOf(
+        [
+          nodeSpec('P', '', { kind: 'project', cwd: 'D:\\proj' }),
+          nodeSpec('F', '', { kind: 'feature' }),
+          nodeSpec('G', '', { kind: 'gate', gateParams: { mode: 'text', textRule: 'contains', pattern: 'PASS' } }),
+          nodeSpec('OUT', '', { kind: 'output', buildTarget: 'web' }),
+        ],
+        [
+          ['P', 'F'],
+          ['F', 'G'],
+          ['G', 'OUT'],
+        ],
+        { canvasId: 'e2e-gate-block' },
+      ),
+    )
+    assert(state.status === 'failed', `无修复 → 保持失败(实际 ${state.status})`)
+    assert(state.nodes['G']?.status === 'failed', 'gate 失败')
+    assert((state.nodes['G']?.error ?? '').includes('闸门未通过'), '错误信息含判定详情')
+    assert(state.nodes['OUT']?.status === 'skipped', '下游被闸门拦住(skipped)')
+  }
+
+  // ---- 33d. 自动修复闭环:gate 失败 → 上游 feature(autofix)带着错误重跑 → gate 通过 → 下游解拦 ----
+  {
+    const env = new FakeEnv()
+    // feature 第一次产出不含 PASS(门不过);第二次(修复轮)产出含 PASS(门过)
+    env.plan('F', [
+      { ok: true, output: '页面已生成,按钮点击无效' },
+      { ok: true, output: '页面已生成,按钮点击有效 PASS' },
+    ])
+    env.planBuiltin('G', [
+      { ok: false, error: '闸门未通过:要求包含「PASS」,但上游产出不满足\n上游产出开头:页面已生成…', log: 'no' },
+      { ok: true, handoffText: '[闸门] 通过(包含「PASS」)', log: 'ok' },
+    ])
+    const state = await new WorkflowRunner(env).run(
+      specOf(
+        [
+          nodeSpec('P', '', { kind: 'project', cwd: 'D:\\proj' }),
+          nodeSpec('F', '', { kind: 'feature', autofix: { enabled: true, maxRounds: 2 } }),
+          nodeSpec('G', '', { kind: 'gate', gateParams: { mode: 'text', textRule: 'contains', pattern: 'PASS' } }),
+          nodeSpec('OUT', '', { kind: 'output', buildTarget: 'web' }),
+        ],
+        [
+          ['P', 'F'],
+          ['F', 'G'],
+          ['G', 'OUT'],
+        ],
+        { canvasId: 'e2e-autofix' },
+      ),
+    )
+    assert(state.status === 'done', `自动修复后链路完成(实际 ${state.status})`)
+    assert(env.prompts.get('F')?.length === 2, `feature 重跑一次(实际 ${env.prompts.get('F')?.length} 次)`)
+    const secondPrompt = env.prompt('F', 1)
+    assert(secondPrompt.includes('【自动修复') && secondPrompt.includes('闸门未通过'), '修复轮把失败信息喂回 LLM')
+    const gateCalls = env.builtinCalls.filter((c) => c.nodeId === 'G')
+    assert(gateCalls.length === 2, `gate 校验两次(实际 ${gateCalls.length})`)
+    assert(state.nodes['OUT']?.status === 'done', '下游解拦并完成')
+    assert(env.notices.some((n) => n.nodeId === 'F' && n.text.includes('[自动修复]')), '修复日志可见')
+  }
+
+  // ---- 33e. 轮次上限:maxRounds=1 → 只重跑一次,再失败保留 failed ----
+  {
+    const env = new FakeEnv()
+    env.plan('F', [
+      { ok: true, output: 'v1' },
+      { ok: true, output: 'v2(仍未修复)' },
+    ])
+    env.planBuiltin('G', [
+      { ok: false, error: '闸门未通过:要求包含「PASS」', log: 'no' },
+      { ok: false, error: '闸门未通过:要求包含「PASS」', log: 'no' },
+    ])
+    const state = await new WorkflowRunner(env).run(
+      specOf(
+        [
+          nodeSpec('P', '', { kind: 'project', cwd: 'D:\\proj' }),
+          nodeSpec('F', '', { kind: 'feature', autofix: { enabled: true, maxRounds: 1 } }),
+          nodeSpec('G', '', { kind: 'gate', gateParams: { mode: 'text', textRule: 'contains', pattern: 'PASS' } }),
+        ],
+        [
+          ['P', 'F'],
+          ['F', 'G'],
+        ],
+        { canvasId: 'e2e-autofix-limit' },
+      ),
+    )
+    assert(state.status === 'failed', `轮次用尽 → 保持失败(实际 ${state.status})`)
+    assert(env.prompts.get('F')?.length === 2, `feature 共跑 2 次(1 正常 + 1 修复,实际 ${env.prompts.get('F')?.length})`)
+    assert(env.builtinCalls.filter((c) => c.nodeId === 'G').length === 2, 'gate 校验两次后停手')
+    assert(env.notices.some((n) => n.text.includes('轮次已用尽')), '轮次用尽日志可见')
+  }
+
+  // ---- 33f. 真实执行器规则:gaterun 的 text 判定(contains / not-contains / regex)与 exit 模式 ----
+  {
+    const { GateRunner } = await import('../src/main/gaterun')
+    const gr = new GateRunner()
+    const mk = (gateParams: never): BuiltinActionRequest =>
+      ({ canvasId: 'c', nodeId: 'G', action: 'gate', projectDir: 'D:\\proj', gateParams, prompt: 'hello PASS world' }) as BuiltinActionRequest
+    const ok1 = await gr.run(mk({ mode: 'text', textRule: 'contains', pattern: 'PASS' } as never))
+    assert(ok1.ok === true, 'text contains 命中 → 通过')
+    const bad = await gr.run(mk({ mode: 'text', textRule: 'contains', pattern: 'FAIL' } as never))
+    assert(bad.ok === false && (bad.error ?? '').includes('要求包含「FAIL」'), 'text contains 未命中 → 失败带判据')
+    const ok2 = await gr.run(mk({ mode: 'text', textRule: 'not-contains', pattern: 'ERROR' } as never))
+    assert(ok2.ok === true, 'text not-contains 命中 → 通过')
+    const ok3 = await gr.run(mk({ mode: 'text', textRule: 'regex', pattern: 'PASS|OK' } as never))
+    assert(ok3.ok === true, 'text regex 命中 → 通过')
+    const bad3 = await gr.run(mk({ mode: 'text', textRule: 'regex', pattern: '(' } as never))
+    assert(bad3.ok === false && (bad3.error ?? '').includes('正则不合法'), '非法正则 → 人话失败')
+    // exit 模式:真实 spawn(node 一定存在),退出码 0 通过 / 1 失败
+    const e0 = await gr.run({ canvasId: 'c', nodeId: 'G', action: 'gate', projectDir: 'D:\\proj', gateParams: { mode: 'exit', command: 'node -e "process.exit(0)"', timeoutSec: 30 }, prompt: '' } as BuiltinActionRequest)
+    assert(e0.ok === true, 'exit 0 → 通过')
+    const e1 = await gr.run({ canvasId: 'c', nodeId: 'G', action: 'gate', projectDir: 'D:\\proj', gateParams: { mode: 'exit', command: 'node -e "process.exit(3)"', timeoutSec: 30 }, prompt: '' } as BuiltinActionRequest)
+    assert(e1.ok === false && (e1.error ?? '').includes('退出码 3'), 'exit 3 → 失败带退出码')
+  }
+
+  // ---- 33g. specFromGraph 透传:gateParams 进 spec / autofix 夹取 1..3 / 非 feature 不带 autofix ----
+  {
+    const spec = specFromGraph({
+      canvasId: 'e2e',
+      projectDir: 'D:\\proj',
+      nodes: [
+        { id: 'p', data: { title: 'P', kind: 'project' } },
+        { id: 'g', data: { title: 'G', kind: 'gate', gateParams: { mode: 'exit', command: 'npm run check' } } },
+        { id: 'f', data: { title: 'F', kind: 'feature', autofix: { enabled: true, maxRounds: 9 } } },
+        { id: 'm', data: { title: 'M', kind: 'merge', autofix: { enabled: true } } },
+      ],
+      edges: [],
+      maxParallel: 2,
+      inlineLimitBytes: 32768,
+    })
+    const g = spec.nodes.find((n) => n.id === 'g')
+    assert(g?.gateParams?.mode === 'exit' && g?.gateParams?.command === 'npm run check', 'gateParams 进 spec')
+    const f = spec.nodes.find((n) => n.id === 'f')
+    assert(f?.autofix?.enabled === true && f?.autofix?.maxRounds === 3, `autofix 夹到 1..3(实际 ${f?.autofix?.maxRounds})`)
+    const m = spec.nodes.find((n) => n.id === 'm')
+    assert(m?.autofix === undefined, '非 feature/agent 节点不带 autofix')
+  }
+}
+
+async function v066ToolkitTests(): Promise<void> {
+  const env = new FakeEnv()
+
+  // ---- 34a. 注册表:8 个新节点都有注册,且 action 正确 ----
+  for (const [kind, action] of [
+    ['lint', 'lint'],
+    ['git', 'git'],
+    ['deps', 'deps'],
+    ['context', 'context'],
+    ['contract', 'contract'],
+    ['cost', 'cost'],
+    ['diff', 'diff'],
+    ['deploy', 'deploy'],
+  ] as const) {
+    const def = NODE_TYPES[kind]
+    assert(def && def.action === action, `34a ${kind} 节点注册且 action=${action}`)
+    assert(def.executor === 'builtin', `34a ${kind} 是 builtin 执行器`)
+  }
+
+  // ---- 34b. specFromGraph 把 8 个专属参数透传到 WorkflowNodeSpec ----
+  const kinds34b = ['lint', 'git', 'deps', 'context', 'contract', 'cost', 'diff', 'deploy'] as const
+  const spec34b = specFromGraph({
+    canvasId: 'e2e-toolkit-graph',
+    nodes: kinds34b.map((kind) => ({
+      id: kind,
+      data: {
+        kind,
+        title: kind,
+        lintParams: kind === 'lint' ? { command: 'npx eslint .', timeoutSec: 60 } : undefined,
+        gitParams: kind === 'git' ? { op: 'log' } : undefined,
+        depsParams: kind === 'deps' ? { manager: 'pip' } : undefined,
+        contextParams: kind === 'context' ? { text: '风格:简约' } : undefined,
+        contractParams: kind === 'contract' ? { text: '补充说明' } : undefined,
+        deployParams: kind === 'deploy' ? { platform: 'netlify' } : undefined,
+      } as Record<string, unknown>,
+    })),
+    edges: [],
+    maxParallel: 2,
+    inlineLimitBytes: 32768,
+  })
+  const n34b = spec34b.nodes.find((n) => n.kind === 'lint')
+  assert(!!n34b && n34b.lintParams?.command === 'npx eslint .' && n34b.lintParams?.timeoutSec === 60, '34b lint 参数透传')
+  const g34c = spec34b.nodes.find((n) => n.kind === 'git')
+  assert(!!g34c && g34c.gitParams?.op === 'log', '34b git 参数透传')
+  const d34d = spec34b.nodes.find((n) => n.kind === 'deps')
+  assert(!!d34d && d34d.depsParams?.manager === 'pip', '34b deps 参数透传')
+  const ct34e = spec34b.nodes.find((n) => n.kind === 'context')
+  assert(!!ct34e && ct34e.contextParams?.text === '风格:简约', '34b context 参数透传')
+  const cc34f = spec34b.nodes.find((n) => n.kind === 'contract')
+  assert(!!cc34f && cc34f.contractParams?.text === '补充说明', '34b contract 参数透传')
+  const dp34g = spec34b.nodes.find((n) => n.kind === 'deploy')
+  assert(!!dp34g && dp34g.deployParams?.platform === 'netlify', '34b deploy 参数透传')
+
+  // ---- 34c. 分发:8 个内置动作都被送进执行器,且 runSummary 只在 cost 上注入 ----
+  const plan: Record<string, BuiltinActionResult[]> = {
+    L: [{ ok: true, handoffText: '[lint] 通过:exit 0', log: 'ok' }],
+    G: [{ ok: true, handoffText: '[git] 工作区 2 处变更', log: 'ok' }],
+    D: [{ ok: true, handoffText: '[deps] ok', log: 'ok' }],
+    C: [{ ok: true, handoffText: '[context] ok', log: 'ok' }],
+    CT: [{ ok: true, handoffText: '[contract] ok', log: 'ok' }],
+    CO: [{ ok: true, handoffText: '[cost] ok', log: 'ok' }],
+    DF: [{ ok: true, handoffText: '[diff] ok', log: 'ok' }],
+    DP: [{ ok: true, handoffText: '[deploy] ok', log: 'ok' }],
+  }
+  for (const [k, v] of Object.entries(plan)) env.planBuiltin(k, v)
+  const state34c = await new WorkflowRunner(env).run(
+    specOf(
+      [
+        nodeSpec('L', '', { kind: 'lint' }),
+        nodeSpec('G', '', { kind: 'git', gitParams: { op: 'status' } }),
+        nodeSpec('D', '', { kind: 'deps', depsParams: { manager: 'auto' } }),
+        nodeSpec('C', '', { kind: 'context', contextParams: { text: '记忆' } }),
+        nodeSpec('CT', '', { kind: 'contract' }),
+        nodeSpec('CO', '', { kind: 'cost' }),
+        nodeSpec('DF', '', { kind: 'diff' }),
+        nodeSpec('DP', '', { kind: 'deploy' }),
+      ],
+      [
+        ['L', 'G'],
+        ['G', 'D'],
+        ['D', 'C'],
+        ['C', 'CT'],
+        ['CT', 'CO'],
+        ['CO', 'DF'],
+        ['DF', 'DP'],
+      ],
+      { canvasId: 'e2e-toolkit' },
+    ),
+  )
+  assert(state34c.status === 'done', `34c 全链完成(实际 ${state34c.status})`)
+  for (const a of ['lint', 'git', 'deps', 'context', 'contract', 'cost', 'diff', 'deploy']) {
+    assert(env.builtinCalls.some((c) => c.action === a), `34c ${a} 被分发(实际 ${env.builtinCalls.map((c) => c.action).join(',')})`)
+  }
+  assert(env.builtinCalls.filter((c) => c.action !== 'cost').every((c) => c.runSummary === undefined), '34c 非 cost 节点不带 runSummary')
+  const costCall = env.builtinCalls.find((c) => c.action === 'cost')
+  assert(!!costCall?.runSummary && costCall.runSummary.includes('tokens'), `34c cost 拿到调度器注入的运行摘要(实际 ${costCall?.runSummary?.slice(0, 80)})`)
+
+  // ---- 34d. 真实执行器:context 落盘 + contract 提取路由 + deps 检测 ----
+  // 唯一子目录:避免上次运行残留污染 git 仓库 / deploy 断言
+  const t66root = path.join(CWD, `.e2e-t66-${Date.now()}`)
+  const t66 = path.join(t66root, 'real')
+  mkdirSync(path.join(t66, 'assets', 'generated'), { recursive: true })
+  writeFileSync(path.join(t66, 'package.json'), JSON.stringify({ name: 'x', dependencies: { react: '^18' } }))
+  writeFileSync(path.join(t66, 'requirements.txt'), 'torch==2.1.0\nrequests')
+  const { ToolkitRunner } = await import('../src/main/toolkit')
+  const tk = new ToolkitRunner()
+  const ctxR = await tk.run({
+    action: 'context',
+    projectDir: t66,
+    contextParams: { text: '使用 TypeScript + React,组件命名 PascalCase' },
+  } as BuiltinActionRequest)
+  assert(ctxR.ok, '34d context 执行成功')
+  const ctxFile = readFileSync(path.join(t66, 'assets', 'generated', 'context.md'), 'utf8')
+  assert(ctxFile.includes('TypeScript') && ctxFile.includes('PascalCase'), '34d context 落盘 assets/generated/context.md')
+  const ctR = await tk.run({
+    action: 'contract',
+    projectDir: t66,
+    prompt: 'app.get("/api/users", ...)\napp.post("/api/login")\nfetch("/api/orders")',
+  } as BuiltinActionRequest)
+  assert(ctR.ok, '34d contract 执行成功')
+  const yaml = readFileSync(path.join(t66, 'assets', 'generated', 'openapi.yaml'), 'utf8')
+  assert(yaml.includes('/api/users') && yaml.includes('/api/login') && yaml.includes('/api/orders'), `34d openapi.yaml 提取 3 条路由(实际 ${yaml})`)
+  const depsR = await tk.run({ action: 'deps', projectDir: t66 } as BuiltinActionRequest)
+  assert(!!depsR.ok && !!depsR.handoffText?.includes('npm 项目') && !!depsR.handoffText?.includes('pip 项目'), `34d deps 同时识别 npm 与 pip(实际 ${depsR.handoffText})`)
+
+  // ---- 34e. 真实执行器:diff 快照 + deploy 部署包 ----
+  writeFileSync(path.join(t66, 'index.html'), '<h1>hi</h1>')
+  mkdirSync(path.join(t66, 'dist', 'web'), { recursive: true })
+  writeFileSync(path.join(t66, 'dist', 'web', 'index.html'), '<h1>built</h1>')
+  writeFileSync(path.join(t66, 'dist', 'web', 'app.js'), 'console.log(1)')
+  const diffR = await tk.run({ action: 'diff', projectDir: t66 } as BuiltinActionRequest)
+  assert(!!diffR.ok && !!diffR.handoffText?.includes('index.html'), `34e diff 快照含顶层文件(实际 ${diffR.handoffText})`)
+  const snapshot = readFileSync(path.join(t66, 'assets', 'generated', 'project-snapshot.md'), 'utf8')
+  assert(snapshot.includes('项目文件总数'), '34e diff 落盘 project-snapshot.md')
+  const depR = await tk.run({ action: 'deploy', projectDir: t66, deployParams: { platform: 'vercel' } } as BuiltinActionRequest)
+  assert(depR.ok, '34e deploy 执行成功')
+  assert(existsSync(path.join(t66, 'deploy', 'index.html')) && existsSync(path.join(t66, 'deploy', 'app.js')), '34e deploy 复制产物到 deploy/')
+  assert(existsSync(path.join(t66, 'deploy', 'vercel.json')), '34e deploy 生成 vercel.json')
+  const depMissR = await tk.run({ action: 'deploy', projectDir: path.join(t66root, 'nodist') } as BuiltinActionRequest)
+  assert(!depMissR.ok && !!depMissR.error?.includes('找不到'), '34e deploy 无产物时报错且提示先跑输出节点')
+
+  // ---- 34f. 真实执行器:git status(临时 git 仓库)+ lint 失败语义 ----
+  const t66g = path.join(t66root, 'git')
+  mkdirSync(t66g, { recursive: true })
+  writeFileSync(path.join(t66g, 'a.txt'), 'x')
+  runSync('git init', t66g)
+  runSync('git add -A && git -c user.name=t -c user.email=t@t commit -m init', t66g)
+  writeFileSync(path.join(t66g, 'b.txt'), 'y')
+  const gitR = await tk.run({ action: 'git', projectDir: t66g, gitParams: { op: 'status' } } as BuiltinActionRequest)
+  assert(!!gitR.ok && !!gitR.handoffText?.includes('b.txt'), `34f git status 报出未跟踪文件(实际 ${gitR.handoffText})`)
+  const lintFailR = await tk.run({ action: 'lint', projectDir: t66g, lintParams: { command: 'node -e "process.exit(3)"', timeoutSec: 30 } } as BuiltinActionRequest)
+  assert(!lintFailR.ok && !!lintFailR.error?.includes('lint 未通过'), `34f lint 非零退出码 = 失败(实际 ${lintFailR.error})`)
+  const lintOkR = await tk.run({ action: 'lint', projectDir: t66g, lintParams: { command: 'node -e "process.exit(0)"', timeoutSec: 30 } } as BuiltinActionRequest)
+  assert(lintOkR.ok, '34f lint 零退出码 = 通过')
+  // git commit 自动化(不 push)
+  const commitR = await tk.run({ action: 'git', projectDir: t66g, gitParams: { op: 'commit', message: 'e2e auto commit' } } as BuiltinActionRequest)
+  assert(!!commitR.ok && !!commitR.handoffText?.includes('e2e auto commit'), `34f git commit 自动提交(实际 ${commitR.handoffText})`)
+  const statusAfter = await tk.run({ action: 'git', projectDir: t66g, gitParams: { op: 'status' } } as BuiltinActionRequest)
+  assert(!!statusAfter.ok && !!statusAfter.handoffText?.includes('干净'), `34f commit 后工作区干净(实际 ${statusAfter.handoffText})`)
+
+  // ---- 34g. cost 真实执行器 + 调度器注入格式 ----
+  const costR = await tk.run({
+    action: 'cost',
+    projectDir: t66,
+    runSummary: '本轮运行共 2 个节点执行完成\n- a(feature):done 1.2s 300 字符\n合计产出 300 字符 · 估算约 75 tokens',
+  } as BuiltinActionRequest)
+  assert(!!costR.ok && !!costR.handoffText?.includes('75 tokens'), `34g cost 透传运行摘要(实际 ${costR.handoffText})`)
+
+  console.log('  v0.6.6 工程化节点群全部断言通过(34a..34g)')
+}
+
+function runSync(cmd: string, cwd: string): string {
+  const r = spawnSync(cmd, { cwd, shell: true, encoding: 'utf8' })
+  return `${r.status ?? 'null'}|${r.stdout ?? ''}|${r.stderr ?? ''}`
 }
 
 main()

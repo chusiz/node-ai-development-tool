@@ -29,6 +29,8 @@ recoverable and composable.
 | Python node (subprocess, cwd-locked) | ✅ v0.6.4 | reuse AI/ML ecosystem, zero token |
 | Startup lazy-loading of heavy executors | ✅ v0.6.4 | canvas interactive faster |
 | Governance docs (CONTRIBUTING / CoC / SECURITY / ARCHITECTURE / PLUGIN) + first-run guide | ✅ v0.6.4 | |
+| Feedback loop — Gate node + Auto-Fix (run → fail → fix → re-run) | ✅ v0.6.5 | gate builtin (exit/text), scheduler-level autofix with maxRounds |
+| Deterministic engineering nodes — lint / git / deps / context / contract / cost / diff / deploy | ✅ v0.6.6 | `src/main/toolkit`; zero LLM tokens, e2e 34a..34g |
 | Human Approval node — approve dangerous commands, review key decisions, pick among agent outputs | ⬜ | Needs async UI + execution pause/resume |
 | Permission tiers — Read-only / Project-scoped write / System / Network / Env·secret | ⬜ | Show full command + affected dir + network target before each run |
 | Policy / Guardrail node — deny-lists for dirs, hosts, commands | ⬜ | Enterprise-friendly |

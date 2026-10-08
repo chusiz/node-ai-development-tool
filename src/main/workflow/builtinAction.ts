@@ -2,10 +2,19 @@ import type {
   BuildOptions,
   BuildTarget,
   ChartParams,
+  GateParams,
   ImageParams,
   ImageProviderConfig,
   PythonParams,
   VideoParams,
+  LintParams,
+  GitParams,
+  DepsParams,
+  ContextParams,
+  ContractParams,
+  CostParams,
+  DiffParams,
+  DeployParams,
 } from '../../shared/canvas'
 
 /**
@@ -73,6 +82,22 @@ export interface BuiltinActionRequest {
   // ---- python 专属(v0.6.4 多语言节点)----
   /** Python 执行参数:脚本本体 / 脚本文件 / 命令行参数 / python 路径 */
   pythonParams?: PythonParams
+
+  // ---- gate 专属(v0.6.5 反馈闭环)----
+  /** 校验参数:mode=exit 跑命令看退出码;mode=text 校验上游产出文本(数据走 `prompt`) */
+  gateParams?: GateParams
+
+  // ---- v0.6.6 工程化节点群 ----
+  lintParams?: LintParams
+  gitParams?: GitParams
+  depsParams?: DepsParams
+  contextParams?: ContextParams
+  contractParams?: ContractParams
+  costParams?: CostParams
+  diffParams?: DiffParams
+  deployParams?: DeployParams
+  /** cost 专属:调度器注入的本轮全图状态摘要(各节点状态/耗时/产出规模) */
+  runSummary?: string
 
   /** 进度/日志要能冒泡到 RunBar / 节点日志(packager 与 imagegen 都走它) */
   onProgress?(line: string): void

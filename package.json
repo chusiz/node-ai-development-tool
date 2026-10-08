@@ -1,6 +1,6 @@
 {
   "name": "chusiz",
-  "version": "0.6.4",
+  "version": "0.6.6",
   "private": true,
   "description": "节点式 AI 软件/应用/游戏制作工作台:本地模型直出生图、交接节点、Electron exe 打包、视频理解",
   "productName": "Node AI Development Tool",

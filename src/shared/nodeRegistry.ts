@@ -92,6 +92,15 @@ export type NodeIconName =
   | 'router'
   | 'chart'
   | 'python'
+  | 'gate'
+  | 'lint'
+  | 'git'
+  | 'deps'
+  | 'context'
+  | 'contract'
+  | 'cost'
+  | 'diff'
+  | 'deploy'
 
 /** 类型角标:图标 + 文字 + 颜色类(+ 可选 tooltip) */
 export interface NodeBadge {
@@ -537,6 +546,188 @@ export const NODE_TYPES = {
           message: `测试节点「${ctx.data.title || ctx.id}」要有个地方跑测试:项目文件夹还没设`,
         })
       }
+      return out
+    },
+  },
+  gate: {
+    label: '闸门',
+    badge: { icon: 'gate', text: '闸门', cls: 'kind-gate', title: '校验不过就拦住下游,并触发上游自动修复(v0.6.5 反馈闭环)' },
+    // 1 入 1 出:它是链上的校验点 —— 不通过 = 失败 = 下游被拦(失败传播)
+    ports: { target: 1, source: 1 },
+    executor: 'builtin',
+    action: 'gate',
+    payload: 'report',
+    defaultTitle: '闸门节点',
+    addEntries: [
+      { key: 'gate', label: '闸门', icon: 'gate', hint: '运行后校验,不通过就拦住下游(可触发自动修复)' },
+    ],
+    // 缺省失败策略 = skip:闸门没过,下游就别往下走(和 test 同侧安全)
+    defaultConfig: { gateParams: { mode: 'text', textRule: 'contains', pattern: 'PASS' } },
+    normalize: (m, raw) => {
+      const g = raw.gateParams ?? m.gateParams
+      return {
+        ...m,
+        gateParams: {
+          mode: g?.mode === 'exit' ? 'exit' : 'text',
+          command: typeof g?.command === 'string' ? g.command : '',
+          timeoutSec: clampTimeout(g?.timeoutSec ?? m.gateParams?.timeoutSec ?? 120),
+          textRule:
+            g?.textRule === 'not-contains' || g?.textRule === 'regex' ? g.textRule : 'contains',
+          pattern: typeof g?.pattern === 'string' ? g.pattern : '',
+          hint: typeof g?.hint === 'string' ? g.hint : '',
+        },
+      }
+    },
+    validate: (ctx) => {
+      const out: GraphIssue[] = []
+      const g = ctx.data.gateParams ?? { mode: 'text' as const }
+      if (g.mode === 'exit' && !(g.command ?? '').trim()) {
+        out.push({
+          level: 'warn',
+          nodeId: ctx.id,
+          message: `闸门节点「${ctx.data.title || ctx.id}」选了「跑命令」,但还没填命令`,
+        })
+      }
+      if (g.mode === 'text' && !(g.pattern ?? '').trim()) {
+        out.push({
+          level: 'warn',
+          nodeId: ctx.id,
+          message: `闸门节点「${ctx.data.title || ctx.id}」选了「校验文本」,但还没填匹配内容`,
+        })
+      }
+      return out
+    },
+  },
+  // ---- v0.6.6 工程化节点群(P1/P2/P4,全部确定性执行,不耗 LLM token)----
+  lint: {
+    label: '静态检查',
+    badge: { icon: 'lint', text: '检查', cls: 'kind-lint', title: '确定性静态检查(tsc / eslint),比 LLM 审查更便宜' },
+    ports: { target: 1, source: 1 },
+    executor: 'builtin',
+    action: 'lint',
+    payload: 'report',
+    defaultTitle: '静态检查节点',
+    addEntries: [{ key: 'lint', label: '静态检查', icon: 'lint', hint: '在项目里跑 tsc/eslint 等确定性检查,结果交给下游' }],
+    defaultConfig: { lintParams: { command: 'npx tsc --noEmit', timeoutSec: 300 } },
+    normalize: (m, raw) => ({
+      ...m,
+      lintParams: {
+        command: typeof raw.lintParams?.command === 'string' ? raw.lintParams.command : (m.lintParams?.command ?? 'npx tsc --noEmit'),
+        timeoutSec: clampTimeout(raw.lintParams?.timeoutSec ?? m.lintParams?.timeoutSec ?? 300),
+      },
+    }),
+    validate: (ctx) => {
+      const out: GraphIssue[] = []
+      if (!ctx.resolvedProjectDir) out.push({ level: 'warn', nodeId: ctx.id, message: `静态检查节点「${ctx.data.title || ctx.id}」需要项目文件夹` })
+      return out
+    },
+  },
+  git: {
+    label: '版本控制',
+    badge: { icon: 'git', text: 'Git', cls: 'kind-git', title: '本地版本操作(status / commit / log / branch),不 push 外部' },
+    ports: { target: 1, source: 1 },
+    executor: 'builtin',
+    action: 'git',
+    payload: 'handoff',
+    defaultTitle: 'Git 节点',
+    addEntries: [{ key: 'git', label: '版本控制', icon: 'git', hint: '本地 git:提交 / 查看状态 / 最近提交 / 当前分支(不推送)' }],
+    defaultConfig: { gitParams: { op: 'commit', message: '' } },
+    normalize: (m, raw) => ({
+      ...m,
+      gitParams: {
+        op: raw.gitParams?.op ?? m.gitParams?.op ?? 'commit',
+        message: typeof raw.gitParams?.message === 'string' ? raw.gitParams.message : (m.gitParams?.message ?? ''),
+      },
+    }),
+    validate: () => [],
+  },
+  deps: {
+    label: '依赖管理',
+    badge: { icon: 'deps', text: '依赖', cls: 'kind-deps', title: '依赖清单 / 缺失检测 / 版本(自动识别 npm 与 pip)' },
+    ports: { target: 1, source: 1 },
+    executor: 'builtin',
+    action: 'deps',
+    payload: 'handoff',
+    defaultTitle: '依赖管理节点',
+    addEntries: [{ key: 'deps', label: '依赖管理', icon: 'deps', hint: '检查 package.json / requirements.txt,报告依赖与缺失' }],
+    defaultConfig: { depsParams: { manager: 'auto' } },
+    normalize: (m, raw) => ({ ...m, depsParams: { manager: raw.depsParams?.manager ?? 'auto' } }),
+    validate: () => [],
+  },
+  context: {
+    label: '项目记忆',
+    badge: { icon: 'context', text: '记忆', cls: 'kind-context', title: '共享代码风格 / 命名规范 / 接口清单,解决多节点风格不一致' },
+    ports: { target: 1, source: 1 },
+    executor: 'builtin',
+    action: 'context',
+    payload: 'handoff',
+    defaultTitle: '项目记忆节点',
+    addEntries: [{ key: 'context', label: '项目记忆', icon: 'context', hint: '把风格/规范/接口说明写进项目,下游节点都能引用' }],
+    defaultConfig: { contextParams: { text: '' } },
+    normalize: (m, raw) => ({ ...m, contextParams: { text: typeof raw.contextParams?.text === 'string' ? raw.contextParams.text : (m.contextParams?.text ?? '') } }),
+    validate: (ctx) => {
+      const out: GraphIssue[] = []
+      if (!(ctx.data.contextParams?.text ?? '').trim()) out.push({ level: 'warn', nodeId: ctx.id, message: `项目记忆节点「${ctx.data.title || ctx.id}」还没填写记忆内容` })
+      return out
+    },
+  },
+  contract: {
+    label: '接口契约',
+    badge: { icon: 'contract', text: '契约', cls: 'kind-contract', title: '从上游产出提取路由,生成 OpenAPI 契约文件' },
+    ports: { target: 1, source: 1 },
+    executor: 'builtin',
+    action: 'contract',
+    payload: 'handoff',
+    defaultTitle: '接口契约节点',
+    addEntries: [{ key: 'contract', label: '接口契约', icon: 'contract', hint: '提取 API 路由生成 openapi.yaml,前后端对齐契约' }],
+    defaultConfig: { contractParams: { text: '' } },
+    normalize: (m, raw) => ({ ...m, contractParams: { text: typeof raw.contractParams?.text === 'string' ? raw.contractParams.text : (m.contractParams?.text ?? '') } }),
+    validate: () => [],
+  },
+  cost: {
+    label: '运行摘要',
+    badge: { icon: 'cost', text: '成本', cls: 'kind-cost', title: '汇总本轮各节点状态 / 耗时 / 产出规模,估算 token 成本' },
+    ports: { target: 1, source: 1 },
+    executor: 'builtin',
+    action: 'cost',
+    payload: 'handoff',
+    defaultTitle: '运行摘要节点',
+    addEntries: [{ key: 'cost', label: '运行摘要', icon: 'cost', hint: '统计本轮各节点耗时与产出规模,估算成本' }],
+    defaultConfig: {},
+    normalize: (m, _raw) => m,
+    validate: () => [],
+  },
+  diff: {
+    label: '现状快照',
+    badge: { icon: 'diff', text: '快照', cls: 'kind-diff', title: '扫描项目文件树与规模,给增量修改当上下文' },
+    ports: { target: 1, source: 1 },
+    executor: 'builtin',
+    action: 'diff',
+    payload: 'handoff',
+    defaultTitle: '现状快照节点',
+    addEntries: [{ key: 'diff', label: '现状快照', icon: 'diff', hint: '扫描现有项目文件与规模,增量修改时先看现状' }],
+    defaultConfig: {},
+    normalize: (m, _raw) => m,
+    validate: (ctx) => {
+      const out: GraphIssue[] = []
+      if (!ctx.resolvedProjectDir) out.push({ level: 'warn', nodeId: ctx.id, message: `现状快照节点「${ctx.data.title || ctx.id}」需要项目文件夹` })
+      return out
+    },
+  },
+  deploy: {
+    label: '一键部署',
+    badge: { icon: 'deploy', text: '部署', cls: 'kind-deploy', title: '把 Web 产物整理成部署包(vercel / netlify / 静态)' },
+    ports: { target: 1, source: 0 },
+    executor: 'builtin',
+    action: 'deploy',
+    payload: 'handoff',
+    defaultTitle: '部署节点',
+    addEntries: [{ key: 'deploy', label: '一键部署', icon: 'deploy', hint: '把 Web 产物复制成可上传的部署包(vercel/netlify)' }],
+    defaultConfig: { deployParams: { platform: 'vercel' } },
+    normalize: (m, raw) => ({ ...m, deployParams: { platform: raw.deployParams?.platform ?? 'vercel' } }),
+    validate: (ctx) => {
+      const out: GraphIssue[] = []
+      if (!ctx.resolvedProjectDir) out.push({ level: 'warn', nodeId: ctx.id, message: `部署节点「${ctx.data.title || ctx.id}」需要项目文件夹(且上游要有 Web 输出)` })
       return out
     },
   },
@@ -1199,6 +1390,15 @@ export type NodeKind =
   | 'router'
   | 'chart'
   | 'python'
+  | 'gate'
+  | 'lint'
+  | 'git'
+  | 'deps'
+  | 'context'
+  | 'contract'
+  | 'cost'
+  | 'diff'
+  | 'deploy'
 
 /**
  * 取类型定义。未知 kind(手改 graph.json 写了 type:'foo')一律**回落 feature**
@@ -1338,6 +1538,7 @@ export const WORKSPACE_NODES: Record<WorkspaceId, readonly NodeKind[]> = {
     'image',
     'review',
     'test',
+    'gate',
     'doc',
     'game',
     'video',
@@ -1346,6 +1547,16 @@ export const WORKSPACE_NODES: Record<WorkspaceId, readonly NodeKind[]> = {
     'agent',
     'router',
     'chart',
+    'python',
+    // v0.6.6 工程化节点群
+    'lint',
+    'git',
+    'deps',
+    'context',
+    'contract',
+    'cost',
+    'diff',
+    'deploy',
   ],
   image: ['prompt', 'prompt_negative', 'sampler', 'image_output', 'handoff'],
 }

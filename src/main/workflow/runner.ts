@@ -178,6 +178,10 @@ interface ActiveRun {
   routerPick: Map<string, string[]>
   state: RunState
   cancelled: boolean
+  /** v0.6.5 反馈闭环:节点 → 上次验证失败信息(重跑该节点时注入其输入) */
+  fixContext: Map<string, string>
+  /** v0.6.5 反馈闭环:本轮已进行的自动修复轮数 */
+  autofixRounds: number
 }
 
 export class WorkflowRunner {
@@ -265,6 +269,8 @@ export class WorkflowRunner {
       routerPick: new Map(),
       state,
       cancelled: false,
+      fixContext: new Map(),
+      autofixRounds: 0,
     }
     this.runs.set(spec.runId, run)
     this.publish(run, [...active])
@@ -354,6 +360,118 @@ export class WorkflowRunner {
     for (const [id, r] of this.runs) {
       if (r.state.status !== 'running') this.runs.delete(id)
     }
+  }
+
+  // ---------------------------------------------------------------- 反馈闭环(v0.6.5)
+
+  /**
+   * cost 节点的运行摘要:本轮各节点状态 / 耗时 / 产出规模,顺带估算 token 成本。
+   * 只统计已完成/失败的节点;还在 queued/waiting 的不算(那只是还没跑)。
+   */
+  private buildRunSummary(run: ActiveRun): string {
+    const rows: string[] = []
+    let totalChars = 0
+    let estTokens = 0
+    for (const id of run.active) {
+      const n = run.state.nodes[id]
+      if (!n || (n.status !== 'done' && n.status !== 'failed')) continue
+      const s = run.spec.nodes.find((x) => x.id === id)
+      const dur = n.endedAt && n.startedAt ? Math.max(0, n.endedAt - n.startedAt) : 0
+      const chars = n.outputChars ?? (n.outputPreview ?? '').length
+      totalChars += chars
+      estTokens += Math.ceil(chars / 4)
+      rows.push(`- ${s?.title ?? id}(${s?.kind ?? '?'}):${n.status} ${dur ? `${(dur / 1000).toFixed(1)}s` : ''} ${chars ? `${chars} 字符` : ''}`)
+    }
+    return [
+      `本轮运行共 ${rows.length} 个节点执行完成`,
+      ...rows,
+      `合计产出 ${totalChars} 字符 · 估算约 ${estTokens} tokens(按 4 字符/token 粗算,真实消耗以各模型计费为准)`,
+    ].join('\n')
+  }
+
+  /**
+   * 闸门 / 测试失败时,把错误喂回最近的「自动修复」上游节点并重跑链路。
+   * 由 runBuiltinNode 的失败分支调用 —— 重置后节点回到 queued,schedule 循环
+   * 下一轮会按拓扑自动重新拾起(修复节点先跑,链路依次重跑到闸门)。
+   */
+  private maybeAutoFix(run: ActiveRun, failedId: string, errorText: string): void {
+    const failedSpec = run.spec.nodes.find((s) => s.id === failedId)
+    if (!failedSpec || (failedSpec.action !== 'gate' && failedSpec.action !== 'test')) return
+    const fix = this.findAutofixTarget(run, failedId)
+    if (!fix) return
+    const maxRounds = fix.autofix?.maxRounds ?? 2
+    if (run.autofixRounds >= maxRounds) {
+      this.env.notice(failedId, 'warn', `自动修复轮次已用尽(${run.autofixRounds}/${maxRounds}),保留失败状态`)
+      return
+    }
+    run.autofixRounds++
+    run.fixContext.set(fix.id, errorText)
+    this.env.notice(fix.id, 'info', `[自动修复] 第 ${run.autofixRounds}/${maxRounds} 轮:下游「${failedSpec.title}」未通过校验,错误已注入,正在重跑`)
+    this.resetSubgraphForFix(run, fix.id, failedId)
+  }
+
+  /** 从失败节点沿前驱向上,找第一个开启 autofix 的 feature / agent 节点 */
+  private findAutofixTarget(run: ActiveRun, failedId: string): WorkflowNodeSpec | null {
+    const seen = new Set<string>()
+    const stack = [...(run.index.preds.get(failedId) ?? [])].filter((p) => run.active.has(p))
+    while (stack.length > 0) {
+      const id = stack.pop()!
+      if (seen.has(id)) continue
+      seen.add(id)
+      const s = run.spec.nodes.find((n) => n.id === id)
+      if (!s) continue
+      if ((s.kind === 'feature' || s.kind === 'agent') && s.autofix?.enabled) return s
+      for (const p of run.index.preds.get(id) ?? []) {
+        if (run.active.has(p)) stack.push(p)
+      }
+    }
+    return null
+  }
+
+  /**
+   * 把 fix 节点 → 失败节点整条链重置为 queued 并清空产出,让链路重跑。
+   * project 节点不动(只锚目录,重跑纯浪费);被失败传播标成 skipped 的直接
+   * 后继一并重置,让它们跟着新结果走。
+   */
+  private resetSubgraphForFix(run: ActiveRun, fixId: string, failedId: string): void {
+    const doomed = new Set<string>([failedId])
+    const stack = [failedId]
+    while (stack.length > 0) {
+      const id = stack.pop()!
+      for (const p of run.index.preds.get(id) ?? []) {
+        if (!run.active.has(p) || doomed.has(p)) continue
+        doomed.add(p)
+        stack.push(p)
+      }
+    }
+    const resetIds = [...doomed].filter((id) => {
+      const s = run.spec.nodes.find((n) => n.id === id)
+      return s && s.kind !== 'project'
+    })
+    for (const id of resetIds) {
+      const n = run.state.nodes[id]
+      if (!n) continue
+      n.status = 'queued'
+      n.outputPreview = undefined
+      n.artifacts = undefined
+      n.error = undefined
+      n.endedAt = undefined
+      n.inputHash = undefined
+      n.reused = undefined
+      run.outputs.delete(id)
+    }
+    for (const id of run.active) {
+      const n = run.state.nodes[id]
+      if (n && n.status === 'skipped') {
+        const preds = run.index.preds.get(id) ?? []
+        if (preds.some((p) => resetIds.includes(p))) {
+          n.status = 'queued'
+          n.endedAt = undefined
+        }
+      }
+    }
+    void fixId
+    this.publish(run, [...run.active])
   }
 
   // ---------------------------------------------------------------- 调度
@@ -862,9 +980,9 @@ export class WorkflowRunner {
     }
 
     try {
-      // 图像节点 / 采样出图 / 图表:先做**阶段一**占位符展开(调度侧才拿得到上游产出与依赖关系)
+      // 图像节点 / 采样出图 / 图表 / 闸门:先做**阶段一**占位符展开(调度侧才拿得到上游产出与依赖关系)
       let prompt: string | undefined
-      if (spec.action === 'image' || spec.action === 'sampler' || spec.action === 'chart') {
+      if (spec.action === 'image' || spec.action === 'sampler' || spec.action === 'chart' || spec.action === 'gate') {
         prompt = await this.expandImagePrompt(run, spec, spec.id)
       }
 
@@ -888,6 +1006,17 @@ export class WorkflowRunner {
         testCommand: spec.testCommand,
         testTimeoutSec: spec.testTimeoutSec,
         pythonParams: spec.pythonParams,
+        gateParams: spec.gateParams,
+        lintParams: spec.lintParams,
+        gitParams: spec.gitParams,
+        depsParams: spec.depsParams,
+        contextParams: spec.contextParams,
+        contractParams: spec.contractParams,
+        costParams: spec.costParams,
+        diffParams: spec.diffParams,
+        deployParams: spec.deployParams,
+        // cost 节点需要全图运行摘要 —— 调度器才有;执行器拿不到
+        runSummary: spec.action === 'cost' ? this.buildRunSummary(run) : undefined,
         // 打包/出图/视频分析/测试日志一行行冒泡到节点日志(RunBar 已订阅)
         onProgress: (line) => this.env.notice(spec.id, 'info', line),
       })
@@ -913,6 +1042,10 @@ export class WorkflowRunner {
           // 测试"没过"也有产出:失败用例正是探针/下游要看的东西
           outputPreview: spec.action === 'test' ? formatTestOutput(res).slice(0, 600) : undefined,
         })
+        // v0.6.5 反馈闭环:闸门/测试失败 → 找 autofix 上游,注入错误重跑链路
+        if (spec.action === 'gate' || spec.action === 'test') {
+          this.maybeAutoFix(run, spec.id, res.error ?? '')
+        }
         return
       }
       if (spec.action === 'image' || spec.action === 'sampler') {
@@ -976,6 +1109,19 @@ export class WorkflowRunner {
           endedAt: Date.now(),
           outputChars: handoffOut.length,
           outputPreview: handoffOut.slice(0, 600),
+        })
+      } else if (spec.action === 'gate') {
+        /*
+         * 闸门通过:产出 = 通过判据文本,进 outputs 让下游看到"这关过了、凭什么"。
+         * 失败路径在上面(res.ok=false → failed + 触发自动修复)。
+         */
+        const gateOut = res.handoffText ?? `[闸门] 通过`
+        run.outputs.set(spec.id, gateOut)
+        this.setNode(run, spec.id, {
+          status: 'done',
+          endedAt: Date.now(),
+          outputChars: gateOut.length,
+          outputPreview: gateOut.slice(0, 600),
         })
       } else {
         /*
@@ -1083,6 +1229,16 @@ export class WorkflowRunner {
     if (vars.input.length > spill.inlineLimitBytes) {
       const injected = await injectOne(spill, vars.input)
       vars.input = injected.text
+    }
+
+    /*
+     * v0.6.5 反馈闭环:本节点是自动修复节点 → 把上次验证失败信息注入输入,
+     * 让 LLM 拿着真实报错改代码,而不是"猜哪里坏了"。
+     */
+    const fixErr = run.fixContext.get(nodeId)
+    if (fixErr) {
+      vars.input =
+        `${vars.input}\n\n【自动修复 · 上次验证失败信息(务必据此修复,保持原有功能不变)】\n${fixErr}`
     }
 
     /*

@@ -61,6 +61,22 @@ AI 先按需求生成应用代码,同时本地模型直出界面素材,交接节
 
 试试内置 **agent-orchestration** 模板:项目 → 规划智能体 → 两条并行执行支路 → 整合 → 审查智能体 → 输出 exe。
 
+## 反馈闭环与工程化节点群(v0.6.5 / v0.6.6)
+
+从"单向流水线"变成 **运行 → 报错 → 修复 → 再运行**:
+
+- **闸门节点** —— 链上的校验点:`exit` 模式跑命令看退出码,`text` 模式校验上游产出(包含 / 不包含 / 正则)。不通过 = 节点失败,下游全部拦住。
+- **自动修复** —— 在 feature/agent 节点上打开 `autofix`,下游闸门/测试失败时,错误自动喂回 LLM 并重跑该子链(受 `maxRounds` 上限约束)。
+- **8 个确定性工程化节点(零 LLM token)**:
+  - `lint` 静态检查(默认 `npx tsc --noEmit`,退出码判定通过/失败);
+  - `git` 本地版本控制(`status` / `commit` 自动带本地身份 / `log` / `branch`,**不推送外部**);
+  - `deps` 依赖管理(自动识别 npm `package.json` / pip `requirements.txt`,报告清单与缺失);
+  - `context` 项目记忆(风格 / 规范 / 接口清单,落盘 `assets/generated/context.md`,下游可引用);
+  - `contract` 接口契约(从上游代码提取 `app.get/post…` 路由与 `fetch` 调用 → `openapi.yaml`);
+  - `cost` 运行摘要(本轮各节点状态 / 耗时 / 产出规模,估算 token 成本);
+  - `diff` 现状快照(文件树与类型分布,增量修改前先看现状);
+  - `deploy` 一键部署(把 Web 产物复制到 `deploy/`,生成 `vercel.json` / `netlify.toml`)。
+
 ## 开源技能市场
 
 技能抽屉新增「市场」页签:
